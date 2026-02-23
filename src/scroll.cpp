@@ -1,5 +1,13 @@
 #include "scroll.h"
+#include <algorithm>
 #include <cstdio>
+
+std::pair<float, float> calc_sync_speeds(int len1, int len2, unsigned win_width, float base_speed) {
+    float dist1    = len1 * BIG_FONT_SPACING + win_width;
+    float dist2    = len2 * BIG_FONT_SPACING + win_width;
+    float max_dist = std::max(dist1, dist2);
+    return { base_speed * (max_dist / dist1), base_speed * (max_dist / dist2) };
+}
 
 // Loads a letter PNG once, blits + recolors it, returns the plane.
 // Caller owns the plane; pass anchor as parent so it follows anchor moves.
@@ -43,6 +51,7 @@ static ncplane* create_letter_plane(notcurses* nc, ncplane* parent, char letter,
     }
     return child;
 }
+
 
 Scroll::Scroll(std::string_view text_, int y_, float speed_, ScrollDirection dir_,
     unsigned win_width, uint32_t fg_color_, uint32_t bg_color_)
