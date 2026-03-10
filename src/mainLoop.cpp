@@ -5,9 +5,9 @@
 #include <cstdlib>
 
 static void playMp3(const char* path) {
-    system("amixer set PCM 60%");
-    system(("cvlc --play-and-exit " + std::string(path) + " 2>/dev/null").c_str());
-    system("amixer set PCM 10%");
+    system("amixer set PCM 60% 2>&1 >/dev/null");
+    system(("cvlc --play-and-exit " + std::string(path) + " 2> /dev/null").c_str());
+    system("amixer set PCM 10% 2>&1 >/dev/null");
 }
 
 ncplane* std_plane;
@@ -133,7 +133,8 @@ int main() {
     //run_reel("  UPL TRAIN CAM  *  24 HRS A DAY   ", 0.1);
 
     createAlertWindow("摧毁我肥兔的生活", "mister beast better get me the new 6 7 matcha labubu clairo vinyl dubai chocoalte trump announced dead at 79 sports car", 3.0f);  // Shows for 3 seconds
-    playMp3("bing.mp3");
+    std::thread audio_thread(playMp3, "bing.mp3");
+    audio_thread.join();
 
 
     while (true){
