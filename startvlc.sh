@@ -1,36 +1,87 @@
 #!/bin/bash
 defaultVol=10
+BLANKED=0
 sleep 15
 export DISPLAY=:0
 export WAYLAND_DISPLAY=wayland-0
 export XDG_RUNTIME_DIR=/run/user/1000
-amixer set PCM $defaultVol%
+
+# Function to check if current time is within active hours (7PM-3AM)
+is_active_hours() {
+    current_hour=$(date +%H)
+    if [[ $current_hour -ge 19 ]] || [[ $current_hour -lt 3 ]]; then
+        return 0  # true - active hours
+    else
+        return 1  # false - blank hours
+    fi
+}
+
+# Function to blank the screen and mute audio
+screen_blank() {
+    vcgencmd display_power 0
+    amixer set PCM 0%
+    BLANKED=1
+}
+
+# Function to unblank the screen and unmute audio
+screen_unblank() {
+    vcgencmd display_power 1
+    amixer set PCM $defaultVol%
+    BLANKED=0
+}
+
+# Initialize: unblank screen and unmute audio
+screen_unblank
+
+# Start VLC and foot processes
 taskset -c 2 cvlc --loop /home/upl/train.m4a&
 sleep 5
 taskset -c 2 vlc --loop --fullscreen /home/upl/train.mp4&
 sleep 5
-inc=1
-loopCount=$defaultVol
 cd /home/upl/notcursesTesting
 sleep 15
 taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
+
+# Sleep for 2 minutes (testing window)
+sleep 120
+
+# Main scheduling loop
 while true; do
-	echo "$inc"
-	echo "$loopCount"
-	if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
-		sleep 10
-		loopCount=$(($loopCount + 1))
-		amixer set PCM ${loopCount}%
-	elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
-		sleep 10
-		loopCount=$(($loopCount - 1))
-		amixer set PCM ${loopCount}%
-	elif [ "$loopCount" -ge 60 ]; then
-		inc=0
-	else
-		inc=1
-		taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
-		sleep 1200
-	fi
+    if is_active_hours; then
+        # Currently active hours
+        if [[ $BLANKED -eq 1 ]]; then
+            # Was blanked, now need to unblank
+            screen_unblank
+        fi
+        # Run volume ramp logic here
+        inc=1
+        loopCount=$defaultVol
+        while true; do
+            echo "$inc"
+            echo "$loopCount"
+            if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
+                sleep 10
+                loopCount=$(($loopCount + 1))
+                amixer set PCM ${loopCount}%
+            elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
+                sleep 10
+                loopCount=$(($loopCount - 1))
+                amixer set PCM ${loopCount}%
+            elif [ "$loopCount" -ge 60 ]; then
+                inc=0
+            else
+                inc=1
+                taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
+                sleep 1200
+            fi
+        done
+    else
+        # Currently blank hours
+        if [[ $BLANKED -eq 0 ]]; then
+            # Was active, now need to blank
+            screen_blank
+        fi
+    fi
+    sleep 60
 done
 
