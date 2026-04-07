@@ -33,14 +33,25 @@ screen_unblank() {
 # Initialize: unblank screen and unmute audio
 screen_unblank
 
-# Start VLC and foot processes
-taskset -c 2 cvlc --loop /home/upl/train.m4a&
+# Start audio loop
+taskset -c 2 cvlc --loop /home/upl/train.m4a &
+
 sleep 5
-taskset -c 2 vlc --loop --fullscreen /home/upl/train.mp4&
+
+# Start MPV fullscreen with IPC socket for overlay-add support
+# --hwdec=auto  : use Pi hardware video decoder (saves CPU)
+# --no-terminal : suppress terminal output
+taskset -c 2 mpv --loop --fullscreen --no-terminal \
+    --hwdec=auto \
+    --input-ipc-server=/tmp/mpvsock \
+    /home/upl/train.mp4 &
+
 sleep 5
+
+# Start the overlay app (connects to MPV socket, draws via overlay-add)
 cd /home/upl/notcursesTesting
-sleep 15
-taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
+sleep 10
+taskset -c 3 /home/upl/notcursesTesting/upl_scroller &
 
 # Sleep for 2 minutes (testing window)
 sleep 120
@@ -50,15 +61,12 @@ while true; do
     if is_active_hours; then
         # Currently active hours
         if [[ $BLANKED -eq 1 ]]; then
-            # Was blanked, now need to unblank
             screen_unblank
         fi
-        # Run volume ramp logic here
+        # Volume ramp logic
         inc=1
         loopCount=$defaultVol
         while true; do
-            echo "$inc"
-            echo "$loopCount"
             if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
                 sleep 10
                 loopCount=$(($loopCount + 1))
@@ -70,18 +78,17 @@ while true; do
             elif [ "$loopCount" -ge 60 ]; then
                 inc=0
             else
+                # Volume back to minimum — restart overlay app for next cycle
                 inc=1
-                taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
+                taskset -c 3 /home/upl/notcursesTesting/upl_scroller &
                 sleep 1200
             fi
         done
     else
         # Currently blank hours
         if [[ $BLANKED -eq 0 ]]; then
-            # Was active, now need to blank
             screen_blank
         fi
     fi
     sleep 60
 done
-

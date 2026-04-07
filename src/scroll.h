@@ -1,29 +1,23 @@
 #pragma once
-#include <notcurses/notcurses.h>
-#include "mainLoop.h"
-#include <vector>
 #include <string>
 #include <string_view>
-#include <utility>
+#include <vector>
 
-enum ScrollDirection { SCROLL_LEFT, SCROLL_RIGHT };
+enum class Dir { Left, Right };
 
-struct Scroll {
-    std::string           text;
-    int                   y;
-    float                 speed;
-    ScrollDirection       dir;
-    int                   scroll_x;     // x of anchor plane (= left edge of letter[0])
-    float                 accumulator;
-    bool                  done;
-    ncplane*              plane;        // transparent anchor; letter planes are children
-    std::vector<ncplane*> planes;
-    uint32_t              fg_color;
-    uint32_t              bg_color;
+struct ScrollText {
+    std::string text;
+    float       x;       // current left-edge pixel position within the overlay
+    int         y;       // text baseline pixel position within the overlay
+    float       speed;   // pixels per frame
+    Dir         dir;
+    bool        done;
+    float       text_w;  // cached rendered width (pixels)
 
-    Scroll(std::string_view text, int y, float speed, ScrollDirection dir,
-           unsigned win_width, uint32_t fg_color = 0xFFFFFF, uint32_t bg_color = 0x000000);
+    // y_px   : baseline Y in the overlay (e.g. OVERLAY_H - 12 for the bottom bar)
+    // speed_px: pixels to advance per frame
+    ScrollText(std::string_view text, int y_px, float speed_px, Dir dir);
 };
 
-std::pair<float, float> calc_sync_speeds(int len1, int len2, unsigned win_width, float base_speed);
-void run_scrolls(notcurses* nc, ncplane* std_plane, std::vector<Scroll>& scrolls);
+// Runs all scrolls concurrently until every one has scrolled off screen.
+void run_scrolls(std::vector<ScrollText>& scrolls);

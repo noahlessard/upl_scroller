@@ -1,21 +1,28 @@
-﻿cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required(VERSION 3.8)
+project("upl_scroller")
 
-
-project ("upl_scroller")
-
-# make output go to root dir, so next to fonts folder
+# Output binary next to the source (same location as before)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
-# don't need to find the path, because it's already in default paths
-find_library(NOTCURSES_LIBRARY NAMES notcurses)
-find_library(NOTCURSES_CORE_LIBRARY NAMES notcurses-core)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add source to this project's executable.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(CAIRO    REQUIRED cairo)
+pkg_check_modules(FREETYPE REQUIRED freetype2)
+
 file(GLOB SOURCES "src/*.cpp" "src/*.h")
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-# don't need to add directories, since we install thru apt-get, its already in default paths
-target_link_libraries(${PROJECT_NAME} notcurses notcurses-core)
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CAIRO_INCLUDE_DIRS}
+    ${FREETYPE_INCLUDE_DIRS})
 
-# add dynamic reference to fonts path
-target_compile_definitions(${PROJECT_NAME} PRIVATE FONTS_PATH="${CMAKE_SOURCE_DIR}/fonts")
+target_link_libraries(${PROJECT_NAME}
+    ${CAIRO_LIBRARIES}
+    ${FREETYPE_LIBRARIES})
+
+# Paths baked into the binary at compile time
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    FONTS_PATH="${CMAKE_SOURCE_DIR}/fonts"
+    FONT_TTF="${CMAKE_SOURCE_DIR}/pix.ttf")
