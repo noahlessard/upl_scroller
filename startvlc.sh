@@ -34,61 +34,63 @@ screen_unblank() {
 screen_unblank
 
 # Start audio loop
-taskset -c 2 cvlc --loop /home/upl/train.m4a &
+taskset -c 2 cvlc --loop /media/upl/W/train.m4a &
 
 sleep 5
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 # --hwdec=auto  : use Pi hardware video decoder (saves CPU)
 # --no-terminal : suppress terminal output
+rm -f /tmp/mpvsock
 taskset -c 2 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
     --input-ipc-server=/tmp/mpvsock \
-    /home/upl/train.mp4 &
+    /media/upl/W/train.mp4 \
+    >/tmp/mpv.log 2>&1 &
 
 sleep 5
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
-cd /home/upl/notcursesTesting
+cd /home/upl/upl_scroller
 sleep 10
-taskset -c 3 /home/upl/notcursesTesting/upl_scroller &
+taskset -c 3 /home/upl/upl_scroller/upl_scroller &
 
 # Sleep for 2 minutes (testing window)
-sleep 120
+# sleep 120
 
-# Main scheduling loop
-while true; do
-    if is_active_hours; then
-        # Currently active hours
-        if [[ $BLANKED -eq 1 ]]; then
-            screen_unblank
-        fi
-        # Volume ramp logic
-        inc=1
-        loopCount=$defaultVol
-        while true; do
-            if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
-                sleep 10
-                loopCount=$(($loopCount + 1))
-                amixer set PCM ${loopCount}%
-            elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
-                sleep 10
-                loopCount=$(($loopCount - 1))
-                amixer set PCM ${loopCount}%
-            elif [ "$loopCount" -ge 60 ]; then
-                inc=0
-            else
-                # Volume back to minimum — restart overlay app for next cycle
-                inc=1
-                taskset -c 3 /home/upl/notcursesTesting/upl_scroller &
-                sleep 1200
-            fi
-        done
-    else
-        # Currently blank hours
-        if [[ $BLANKED -eq 0 ]]; then
-            screen_blank
-        fi
-    fi
-    sleep 60
-done
+# # Main scheduling loop
+# while true; do
+#     if is_active_hours; then
+#         # Currently active hours
+#         if [[ $BLANKED -eq 1 ]]; then
+#             screen_unblank
+#         fi
+#         # Volume ramp logic
+#         inc=1
+#         loopCount=$defaultVol
+#         while true; do
+#             if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
+#                 sleep 10
+#                 loopCount=$(($loopCount + 1))
+#                 amixer set PCM ${loopCount}%
+#             elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
+#                 sleep 10
+#                 loopCount=$(($loopCount - 1))
+#                 amixer set PCM ${loopCount}%
+#             elif [ "$loopCount" -ge 60 ]; then
+#                 inc=0
+#             else
+#                 # Volume back to minimum — restart overlay app for next cycle
+#                 inc=1
+#                 taskset -c 3 /home/upl/notcursesTesting/upl_scroller &
+#                 sleep 1200
+#             fi
+#         done
+#     else
+#         # Currently blank hours
+#         if [[ $BLANKED -eq 0 ]]; then
+#             screen_blank
+#         fi
+#     fi
+#     sleep 60
+# done

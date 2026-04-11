@@ -11,9 +11,12 @@
 #include <sys/un.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include <cstdio>
+#include <cstdarg>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 #include <thread>
 #include <chrono>
 #include <string>
@@ -32,11 +35,65 @@ static int                 g_shm_size = 0;
 
 static constexpr const char* SHM_PATH = "/dev/shm/overlay.bgra";
 static constexpr const char* MPV_SOCK = "/tmp/mpvsock";
+static constexpr const char* LOG_PATH = "/tmp/upl_scroller.log";
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+static FILE* g_log = nullptr;
+
+static void log_open() {
+    g_log = fopen(LOG_PATH, "w");
+    if (g_log) setvbuf(g_log, nullptr, _IOLBF, 0);  // line-buffered
+}
+
+static void log_msg(const char* fmt, ...) {
+    if (!g_log) return;
+    time_t now = time(nullptr);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    fprintf(g_log, "[%02d:%02d:%02d] ",
+            tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(g_log, fmt, ap);
+    va_end(ap);
+    fputc('\n', g_log);
+    fflush(g_log);
+}
+
+// Drain any pending bytes from mpv (responses / events) into the log.
+// Socket must be O_NONBLOCK for this to be safe.
+static void drain_mpv_replies() {
+    if (g_mpv_sock < 0) return;
+    char buf[1024];
+    for (;;) {
+        ssize_t n = read(g_mpv_sock, buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = '\0';
+            // Trim trailing newline so the log stays tidy
+            while (n > 0 && (buf[n-1] == '\n' || buf[n-1] == '\r')) {
+                buf[--n] = '\0';
+            }
+            log_msg("mpv -> %s", buf);
+        } else if (n == 0) {
+            log_msg("mpv socket closed by peer");
+            close(g_mpv_sock);
+            g_mpv_sock = -1;
+            return;
+        } else {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+            log_msg("read(mpv) error: %s", strerror(errno));
+            return;
+        }
+    }
+}
 
 // ── MPV IPC ───────────────────────────────────────────────────────────────────
 static bool connect_mpv() {
     g_mpv_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (g_mpv_sock < 0) return false;
+    if (g_mpv_sock < 0) {
+        log_msg("socket() failed: %s", strerror(errno));
+        return false;
+    }
 
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
@@ -44,8 +101,17 @@ static bool connect_mpv() {
 
     // Retry for up to 15 seconds while MPV is starting
     for (int i = 0; i < 30; ++i) {
-        if (connect(g_mpv_sock, (sockaddr*)&addr, sizeof(addr)) == 0)
+        if (connect(g_mpv_sock, (sockaddr*)&addr, sizeof(addr)) == 0) {
+            // Make non-blocking so drain_mpv_replies() can poll without stalling
+            int fl = fcntl(g_mpv_sock, F_GETFL, 0);
+            if (fl >= 0) fcntl(g_mpv_sock, F_SETFL, fl | O_NONBLOCK);
+            log_msg("connected to mpv at %s after %d attempts", MPV_SOCK, i + 1);
             return true;
+        }
+        if (i == 0 || i == 29) {
+            log_msg("connect(%s) attempt %d failed: %s",
+                    MPV_SOCK, i + 1, strerror(errno));
+        }
         usleep(500000);
     }
     return false;
@@ -53,20 +119,35 @@ static bool connect_mpv() {
 
 void present_overlay() {
     cairo_surface_flush(g_surface);
-    if (g_mpv_sock < 0) return;
+    if (g_mpv_sock < 0) {
+        log_msg("present_overlay: no mpv socket, skipping");
+        return;
+    }
 
     int stride = OVERLAY_W * 4;
     char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-        "{\"command\":[\"overlay-add\",1,%d,%d,\"%s\",0,%d,%d,%d]}\n",
-        OVERLAY_X, OVERLAY_Y, SHM_PATH, stride, OVERLAY_W, OVERLAY_H);
+    // mpv overlay-add syntax:
+    //   overlay-add <id> <x> <y> <file> <offset> <fmt> <w> <h> <stride>
+    // fmt MUST be the literal string "bgra" (only supported format).
+    int n = snprintf(cmd, sizeof(cmd),
+        "{\"command\":[\"overlay-add\",1,%d,%d,\"%s\",0,\"bgra\",%d,%d,%d]}\n",
+        OVERLAY_X, OVERLAY_Y, SHM_PATH, OVERLAY_W, OVERLAY_H, stride);
 
-    if (write(g_mpv_sock, cmd, strlen(cmd)) < 0) {
-        // Socket died — try to reconnect once
+    static bool logged_first = false;
+    if (!logged_first) {
+        log_msg("first overlay-add cmd: %.*s", n - 1, cmd);  // strip trailing \n
+        logged_first = true;
+    }
+
+    if (write(g_mpv_sock, cmd, (size_t)n) < 0) {
+        log_msg("write(mpv) failed: %s — reconnecting", strerror(errno));
         close(g_mpv_sock);
         g_mpv_sock = -1;
         connect_mpv();
+        return;
     }
+
+    drain_mpv_replies();
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
@@ -238,9 +319,27 @@ static bool init_font() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 int main() {
-    if (!init_shm_cairo())  { fprintf(stderr, "Cairo init failed\n"); return 1; }
-    if (!init_font())       { fprintf(stderr, "Font init failed\n");  return 1; }
-    if (!connect_mpv())     { fprintf(stderr, "MPV connect failed\n"); return 1; }
+    log_open();
+    log_msg("upl_scroller starting (overlay %dx%d at %d,%d, shm=%s, sock=%s)",
+            OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y, SHM_PATH, MPV_SOCK);
+
+    if (!init_shm_cairo()) {
+        log_msg("FATAL: init_shm_cairo failed");
+        fprintf(stderr, "Cairo init failed\n"); return 1;
+    }
+    log_msg("init_shm_cairo OK (%d bytes mapped at %s)", g_shm_size, SHM_PATH);
+
+    if (!init_font()) {
+        log_msg("FATAL: init_font failed (FONT_TTF=%s)", FONT_TTF);
+        fprintf(stderr, "Font init failed\n");  return 1;
+    }
+    log_msg("init_font OK (%s)", FONT_TTF);
+
+    if (!connect_mpv()) {
+        log_msg("FATAL: connect_mpv failed — is mpv running with "
+                "--input-ipc-server=%s ? check /tmp/mpv.log", MPV_SOCK);
+        fprintf(stderr, "MPV connect failed\n"); return 1;
+    }
 
     draw_border(true);
     present_overlay();
