@@ -357,6 +357,8 @@ static void query_mpv_props() {
         "{\"command\":[\"get_property\",\"height\"],\"request_id\":102}\n",
         "{\"command\":[\"get_property\",\"vo-configured\"],\"request_id\":103}\n",
         "{\"command\":[\"get_property\",\"video-out-params\"],\"request_id\":104}\n",
+        "{\"command\":[\"get_property\",\"osd-width\"],\"request_id\":105}\n",
+        "{\"command\":[\"get_property\",\"osd-height\"],\"request_id\":106}\n",
     };
     for (auto c : cmds) write(g_mpv_sock, c, strlen(c));
     usleep(400000);   // 400 ms – give mpv time to reply

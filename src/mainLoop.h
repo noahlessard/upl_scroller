@@ -8,7 +8,7 @@
 constexpr int OVERLAY_W = 500;
 constexpr int OVERLAY_H = 167;
 constexpr int OVERLAY_X = 150;   // (800 - OVERLAY_W) / 2
-constexpr int OVERLAY_Y = 433;   // 600 - OVERLAY_H
+constexpr int OVERLAY_Y = 350;   // 600 - OVERLAY_H - ~83 overscan margin
 
 // ── Bar / border sizes ────────────────────────────────────────────────────────
 constexpr int TOP_BAR_H     = 17;
