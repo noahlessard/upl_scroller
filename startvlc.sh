@@ -44,6 +44,8 @@ sleep 5
 rm -f /tmp/mpvsock
 taskset -c 2 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
+    --geometry=800x600 \
+    --keepaspect=no \
     --input-ipc-server=/tmp/mpvsock \
     /media/upl/W/train.mp4 \
     >/tmp/mpv.log 2>&1 &
