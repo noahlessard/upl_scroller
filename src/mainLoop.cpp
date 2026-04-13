@@ -353,8 +353,8 @@ static void query_mpv_props() {
     if (g_mpv_sock < 0) return;
     const char* cmds[] = {
         "{\"command\":[\"get_property\",\"mpv-version\"],\"request_id\":100}\n",
-        "{\"command\":[\"get_property\",\"video-width\"],\"request_id\":101}\n",
-        "{\"command\":[\"get_property\",\"video-height\"],\"request_id\":102}\n",
+        "{\"command\":[\"get_property\",\"width\"],\"request_id\":101}\n",
+        "{\"command\":[\"get_property\",\"height\"],\"request_id\":102}\n",
         "{\"command\":[\"get_property\",\"vo-configured\"],\"request_id\":103}\n",
         "{\"command\":[\"get_property\",\"video-out-params\"],\"request_id\":104}\n",
     };
