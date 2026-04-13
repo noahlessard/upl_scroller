@@ -119,6 +119,10 @@ static bool connect_mpv() {
 
 void present_overlay() {
     cairo_surface_flush(g_surface);
+    // Ensure all Cairo writes are visible to mpv before it re-reads the file.
+    // MAP_SHARED dirty pages on ARM are not guaranteed visible to another
+    // process's mapping without this barrier.
+    msync(g_shm_data, g_shm_size, MS_SYNC);
     if (g_mpv_sock < 0) {
         log_msg("present_overlay: no mpv socket, skipping");
         return;

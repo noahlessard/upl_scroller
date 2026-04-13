@@ -3,7 +3,7 @@ defaultVol=10
 BLANKED=0
 sleep 15
 export DISPLAY=:0
-export WAYLAND_DISPLAY=wayland-0
+unset WAYLAND_DISPLAY          # force mpv into X11/EGL mode so overlay-add works
 export XDG_RUNTIME_DIR=/run/user/1000
 
 # Function to check if current time is within active hours (7PM-3AM)
@@ -52,7 +52,7 @@ sleep 5
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
 cd /home/upl/upl_scroller
-sleep 10
+sleep 240
 taskset -c 3 /home/upl/upl_scroller/upl_scroller &
 
 # Sleep for 2 minutes (testing window)
