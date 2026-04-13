@@ -35,3 +35,12 @@ cmake -B build
 make -C build
 ./upl_scroller
 ```
+
+## Logging
+
+ To enable logging when needed, compile with:
+
+ ```bash
+   cmake -DCMAKE_CXX_FLAGS="-DENABLE_LOGGING=1" .
+   make
+ ```

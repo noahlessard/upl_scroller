@@ -1,5 +1,18 @@
 #include "mainLoop.h"
 
+// ── Logging Toggle ────────────────────────────────────────────────────────────
+// Set to 1 to enable logging, 0 to disable all log output
+// Default: 0 (disabled)
+#ifndef ENABLE_LOGGING
+#define ENABLE_LOGGING 0
+#endif
+
+#if ENABLE_LOGGING
+#define LOG(...) log_msg(__VA_ARGS__)
+#else
+#define LOG(...) (void)0
+#endif
+
 #include <cairo/cairo.h>
 #include <cairo/cairo-ft.h>
 #include <ft2build.h>
@@ -45,6 +58,7 @@ static void log_open() {
 }
 
 static void log_msg(const char* fmt, ...) {
+#if ENABLE_LOGGING
     if (!g_log) return;
     time_t now = time(nullptr);
     struct tm tmv;
@@ -57,6 +71,10 @@ static void log_msg(const char* fmt, ...) {
     va_end(ap);
     fputc('\n', g_log);
     fflush(g_log);
+#else
+    (void)fmt;
+    (void)ap;
+#endif
 }
 
 // Drain any pending bytes from mpv (responses / events) into the log.
@@ -72,15 +90,15 @@ static void drain_mpv_replies() {
             while (n > 0 && (buf[n-1] == '\n' || buf[n-1] == '\r')) {
                 buf[--n] = '\0';
             }
-            log_msg("mpv -> %s", buf);
+            LOG("mpv -> %s", buf);
         } else if (n == 0) {
-            log_msg("mpv socket closed by peer");
+            LOG("mpv socket closed by peer");
             close(g_mpv_sock);
             g_mpv_sock = -1;
             return;
         } else {
             if (errno == EAGAIN || errno == EWOULDBLOCK) return;
-            log_msg("read(mpv) error: %s", strerror(errno));
+            LOG("read(mpv) error: %s", strerror(errno));
             return;
         }
     }
@@ -90,7 +108,7 @@ static void drain_mpv_replies() {
 static bool connect_mpv() {
     g_mpv_sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (g_mpv_sock < 0) {
-        log_msg("socket() failed: %s", strerror(errno));
+        LOG("socket() failed: %s", strerror(errno));
         return false;
     }
 
@@ -104,11 +122,11 @@ static bool connect_mpv() {
             // Make non-blocking so drain_mpv_replies() can poll without stalling
             int fl = fcntl(g_mpv_sock, F_GETFL, 0);
             if (fl >= 0) fcntl(g_mpv_sock, F_SETFL, fl | O_NONBLOCK);
-            log_msg("connected to mpv at %s after %d attempts", MPV_SOCK, i + 1);
+            LOG("connected to mpv at %s after %d attempts", MPV_SOCK, i + 1);
             return true;
         }
         if (i == 0 || i == 29) {
-            log_msg("connect(%s) attempt %d failed: %s",
+            LOG("connect(%s) attempt %d failed: %s",
                     MPV_SOCK, i + 1, strerror(errno));
         }
         usleep(500000);
@@ -123,7 +141,7 @@ void present_overlay() {
     // process's mapping without this barrier.
     msync(g_shm_data, g_shm_size, MS_SYNC);
     if (g_mpv_sock < 0) {
-        log_msg("present_overlay: no mpv socket, skipping");
+        LOG("present_overlay: no mpv socket, skipping");
         return;
     }
 
@@ -138,12 +156,12 @@ void present_overlay() {
 
     static bool logged_first = false;
     if (!logged_first) {
-        log_msg("first overlay-add cmd: %.*s", n - 1, cmd);  // strip trailing \n
+        LOG("first overlay-add cmd: %.*s", n - 1, cmd);  // strip trailing \n
         logged_first = true;
     }
 
     if (write(g_mpv_sock, cmd, (size_t)n) < 0) {
-        log_msg("write(mpv) failed: %s — reconnecting", strerror(errno));
+        LOG("write(mpv) failed: %s - reconnecting", strerror(errno));
         close(g_mpv_sock);
         g_mpv_sock = -1;
         connect_mpv();
@@ -285,11 +303,11 @@ static bool init_shm_cairo() {
     int stride = OVERLAY_W * 4;
     g_shm_size = stride * OVERLAY_H;
 
-    log_msg("shm: opening %s (size=%d)", SHM_PATH, g_shm_size);
+    LOG("shm: opening %s (size=%d)", SHM_PATH, g_shm_size);
     int fd = open(SHM_PATH, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) { log_msg("shm: open failed: %s", strerror(errno)); return false; }
+    if (fd < 0) { LOG("shm: open failed: %s", strerror(errno)); return false; }
     if (ftruncate(fd, g_shm_size) < 0) {
-        log_msg("shm: ftruncate failed: %s", strerror(errno));
+        LOG("shm: ftruncate failed: %s", strerror(errno));
         close(fd); return false;
     }
 
@@ -297,10 +315,10 @@ static bool init_shm_cairo() {
                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
     if (g_shm_data == MAP_FAILED) {
-        log_msg("shm: mmap failed: %s", strerror(errno));
+        LOG("shm: mmap failed: %s", strerror(errno));
         return false;
     }
-    log_msg("shm: mmap OK at %p", (void*)g_shm_data);
+    LOG("shm: mmap OK at %p", (void*)g_shm_data);
 
     // CAIRO_FORMAT_ARGB32 = premul ARGB in native 32-bit order
     // On little-endian (Pi) bytes in memory are: B G R A  →  exactly MPV's BGRA
@@ -310,8 +328,8 @@ static bool init_shm_cairo() {
 
     cairo_status_t ss = cairo_surface_status(g_surface);
     cairo_status_t cs = cairo_status(g_cr);
-    log_msg("cairo surface status: %s", cairo_status_to_string(ss));
-    log_msg("cairo context status: %s", cairo_status_to_string(cs));
+    LOG("cairo surface status: %s", cairo_status_to_string(ss));
+    LOG("cairo context status: %s", cairo_status_to_string(cs));
     if (ss != CAIRO_STATUS_SUCCESS || cs != CAIRO_STATUS_SUCCESS) return false;
 
     return true;
@@ -342,7 +360,7 @@ static void log_sample_pixels() {
     struct { int x, y; } pts[] = { {0,0}, {600,150}, {1199,299}, {OVERLAY_W/2, OVERLAY_H/2} };
     for (auto& p : pts) {
         const uint8_t* b = g_shm_data + (p.y * OVERLAY_W + p.x) * 4;
-        log_msg("  pixel[%4d,%3d] B=%02X G=%02X R=%02X A=%02X",
+        LOG("  pixel[%4d,%3d] B=%02X G=%02X R=%02X A=%02X",
                 p.x, p.y, b[0], b[1], b[2], b[3]);
     }
 }
@@ -361,11 +379,11 @@ static void query_mpv_props() {
         "{\"command\":[\"get_property\",\"osd-height\"],\"request_id\":106}\n",
     };
     for (auto c : cmds) write(g_mpv_sock, c, strlen(c));
-    usleep(400000);   // 400 ms – give mpv time to reply
+    usleep(400000);   // 400 ms - give mpv time to reply
     drain_mpv_replies();
 }
 
-// Draw a SOLID magenta box covering the ENTIRE overlay – no transparency.
+// Draw a SOLID magenta box covering the ENTIRE overlay - no transparency.
 // Cairo premultiplied ARGB32 LE for magenta (R=1,G=0,B=1,A=1):
 //   bytes: B=0xFF G=0x00 R=0xFF A=0xFF → MPV bgra = magenta, fully opaque.
 static void draw_test_box() {
@@ -375,58 +393,60 @@ static void draw_test_box() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 int main() {
+#if ENABLE_LOGGING
     log_open();
-    log_msg("upl_scroller starting (overlay %dx%d at %d,%d, shm=%s, sock=%s)",
+    LOG("upl_scroller starting (overlay %dx%d at %d,%d, shm=%s, sock=%s)",
             OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y, SHM_PATH, MPV_SOCK);
+#endif
 
     if (!init_shm_cairo()) {
-        log_msg("FATAL: init_shm_cairo failed");
+        LOG("FATAL: init_shm_cairo failed");
         fprintf(stderr, "Cairo init failed\n"); return 1;
     }
-    log_msg("init_shm_cairo OK (%d bytes mapped at %s)", g_shm_size, SHM_PATH);
+    LOG("init_shm_cairo OK (%d bytes mapped at %s)", g_shm_size, SHM_PATH);
 
     if (!init_font()) {
-        log_msg("FATAL: init_font failed (FONT_TTF=%s)", FONT_TTF);
+        LOG("FATAL: init_font failed (FONT_TTF=%s)", FONT_TTF);
         fprintf(stderr, "Font init failed\n");  return 1;
     }
-    log_msg("init_font OK (%s)", FONT_TTF);
+    LOG("init_font OK (%s)", FONT_TTF);
 
     if (!connect_mpv()) {
-        log_msg("FATAL: connect_mpv failed — is mpv running with "
+        LOG("FATAL: connect_mpv failed - is mpv running with "
                 "--input-ipc-server=%s ? check /tmp/mpv.log", MPV_SOCK);
         fprintf(stderr, "MPV connect failed\n"); return 1;
     }
 
     // Ask mpv what it is and what the video looks like.
-    log_msg("querying mpv properties...");
+    LOG("querying mpv properties...");
     query_mpv_props();
 
     // ── Simple test loop ──────────────────────────────────────────────────────
     // Paint the ENTIRE overlay magenta (no transparency) and hold for 5 s.
     // If ANYTHING appears on screen the overlay pipeline is working.
     // If pixels below are non-zero but nothing shows, the issue is in mpv's VO.
-    log_msg("TEST: drawing solid magenta box (%dx%d) at video pos (%d,%d)",
+    LOG("TEST: drawing solid magenta box (%dx%d) at video pos (%d,%d)",
             OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y);
     draw_test_box();
     cairo_surface_flush(g_surface);
     msync(g_shm_data, g_shm_size, MS_SYNC);
 
-    log_msg("TEST: SHM pixel samples after draw:");
+    LOG("TEST: SHM pixel samples after draw:");
     log_sample_pixels();
 
     present_overlay();
-    log_msg("TEST: overlay-add sent – holding 5 s to observe display…");
+    LOG("TEST: overlay-add sent – holding 5 s to observe display...");
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
     // Drain any mpv responses that arrived while we slept.
     drain_mpv_replies();
 
     // Second query now that the video output should be fully up.
-    log_msg("re-querying mpv properties (VO should be running now)...");
+    LOG("re-querying mpv properties (VO should be running now)...");
     query_mpv_props();
 
     // Keep refreshing the overlay so mpv doesn't drop it.
-    log_msg("TEST: entering hold loop (overlay-add every 2 s)");
+    LOG("TEST: entering hold loop (overlay-add every 2 s)");
     while (true) {
         draw_test_box();
         present_overlay();
