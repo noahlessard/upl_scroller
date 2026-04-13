@@ -1,5 +1,4 @@
 #include "mainLoop.h"
-#include "scroll.h"
 
 #include <cairo/cairo.h>
 #include <cairo/cairo-ft.h>
@@ -286,20 +285,35 @@ static bool init_shm_cairo() {
     int stride = OVERLAY_W * 4;
     g_shm_size = stride * OVERLAY_H;
 
+    log_msg("shm: opening %s (size=%d)", SHM_PATH, g_shm_size);
     int fd = open(SHM_PATH, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) { perror("open shm"); return false; }
-    if (ftruncate(fd, g_shm_size) < 0) { perror("ftruncate"); close(fd); return false; }
+    if (fd < 0) { log_msg("shm: open failed: %s", strerror(errno)); return false; }
+    if (ftruncate(fd, g_shm_size) < 0) {
+        log_msg("shm: ftruncate failed: %s", strerror(errno));
+        close(fd); return false;
+    }
 
     g_shm_data = (uint8_t*)mmap(nullptr, g_shm_size,
                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
-    if (g_shm_data == MAP_FAILED) { perror("mmap"); return false; }
+    if (g_shm_data == MAP_FAILED) {
+        log_msg("shm: mmap failed: %s", strerror(errno));
+        return false;
+    }
+    log_msg("shm: mmap OK at %p", (void*)g_shm_data);
 
     // CAIRO_FORMAT_ARGB32 = premul ARGB in native 32-bit order
     // On little-endian (Pi) bytes in memory are: B G R A  →  exactly MPV's BGRA
     g_surface = cairo_image_surface_create_for_data(
         g_shm_data, CAIRO_FORMAT_ARGB32, OVERLAY_W, OVERLAY_H, stride);
     g_cr = cairo_create(g_surface);
+
+    cairo_status_t ss = cairo_surface_status(g_surface);
+    cairo_status_t cs = cairo_status(g_cr);
+    log_msg("cairo surface status: %s", cairo_status_to_string(ss));
+    log_msg("cairo context status: %s", cairo_status_to_string(cs));
+    if (ss != CAIRO_STATUS_SUCCESS || cs != CAIRO_STATUS_SUCCESS) return false;
+
     return true;
 }
 
@@ -319,6 +333,42 @@ static bool init_font() {
 
     cairo_set_font_size(g_cr, LABEL_FONT_SZ);
     return true;
+}
+
+// ── Diagnostics ───────────────────────────────────────────────────────────────
+
+// Log the BGRA bytes at a handful of positions so we can verify Cairo wrote them.
+static void log_sample_pixels() {
+    struct { int x, y; } pts[] = { {0,0}, {600,150}, {1199,299}, {OVERLAY_W/2, OVERLAY_H/2} };
+    for (auto& p : pts) {
+        const uint8_t* b = g_shm_data + (p.y * OVERLAY_W + p.x) * 4;
+        log_msg("  pixel[%4d,%3d] B=%02X G=%02X R=%02X A=%02X",
+                p.x, p.y, b[0], b[1], b[2], b[3]);
+    }
+}
+
+// Ask mpv for key properties so we know what the Pi is actually running.
+// Responses are non-blocking; we sleep briefly then drain them.
+static void query_mpv_props() {
+    if (g_mpv_sock < 0) return;
+    const char* cmds[] = {
+        "{\"command\":[\"get_property\",\"mpv-version\"],\"request_id\":100}\n",
+        "{\"command\":[\"get_property\",\"video-width\"],\"request_id\":101}\n",
+        "{\"command\":[\"get_property\",\"video-height\"],\"request_id\":102}\n",
+        "{\"command\":[\"get_property\",\"vo-configured\"],\"request_id\":103}\n",
+        "{\"command\":[\"get_property\",\"video-out-params\"],\"request_id\":104}\n",
+    };
+    for (auto c : cmds) write(g_mpv_sock, c, strlen(c));
+    usleep(400000);   // 400 ms – give mpv time to reply
+    drain_mpv_replies();
+}
+
+// Draw a SOLID magenta box covering the ENTIRE overlay – no transparency.
+// Cairo premultiplied ARGB32 LE for magenta (R=1,G=0,B=1,A=1):
+//   bytes: B=0xFF G=0x00 R=0xFF A=0xFF → MPV bgra = magenta, fully opaque.
+static void draw_test_box() {
+    cairo_set_source_rgba(g_cr, 1, 0, 1, 1);   // magenta, fully opaque
+    cairo_paint(g_cr);                          // fill every pixel
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -345,29 +395,38 @@ int main() {
         fprintf(stderr, "MPV connect failed\n"); return 1;
     }
 
-    draw_border(true);
+    // Ask mpv what it is and what the video looks like.
+    log_msg("querying mpv properties...");
+    query_mpv_props();
+
+    // ── Simple test loop ──────────────────────────────────────────────────────
+    // Paint the ENTIRE overlay magenta (no transparency) and hold for 5 s.
+    // If ANYTHING appears on screen the overlay pipeline is working.
+    // If pixels below are non-zero but nothing shows, the issue is in mpv's VO.
+    log_msg("TEST: drawing solid magenta box (%dx%d) at video pos (%d,%d)",
+            OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y);
+    draw_test_box();
+    cairo_surface_flush(g_surface);
+    msync(g_shm_data, g_shm_size, MS_SYNC);
+
+    log_msg("TEST: SHM pixel samples after draw:");
+    log_sample_pixels();
+
     present_overlay();
+    log_msg("TEST: overlay-add sent – holding 5 s to observe display…");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    // Drain any mpv responses that arrived while we slept.
+    drain_mpv_replies();
 
-    create_alert("摧毁我肥兔的生活",
-        "mister beast better get me the new 6 7 matcha labubu clairo vinyl "
-        "dubai chocolate trump announced dead at 79 sports car",
-        3.0f);
+    // Second query now that the video output should be fully up.
+    log_msg("re-querying mpv properties (VO should be running now)...");
+    query_mpv_props();
 
-    std::thread audio(play_mp3, "bing.mp3");
-    audio.join();
-
+    // Keep refreshing the overlay so mpv doesn't drop it.
+    log_msg("TEST: entering hold loop (overlay-add every 2 s)");
     while (true) {
-        std::vector<ScrollText> scrolls = {
-            ScrollText(
-                "UPL TRAIN CAM  *  24 HOURS A DAY  *  NON STOP  *  SERIOUSLY...  *",
-                OVERLAY_H - 12,   // baseline: near bottom of the bottom bar
-                SCROLL_SPEED_PX,
-                Dir::Left)
-        };
-        run_scrolls(scrolls);
-        draw_border(true);
+        draw_test_box();
         present_overlay();
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
