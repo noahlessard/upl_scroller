@@ -40,10 +40,14 @@ sleep 5
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 # --hwdec=auto  : use Pi hardware video decoder (saves CPU)
+# --vo=gpu      : use GPU video output (faster)
+# --gpu-context=egl : share GPU context with display system
 # --no-terminal : suppress terminal output
 rm -f /tmp/mpvsock
 taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
+    --vo=gpu \
+    --gpu-context=egl \
     --geometry=800x600 \
     --keepaspect=no \
     --input-ipc-server=/tmp/mpvsock \

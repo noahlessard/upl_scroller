@@ -447,11 +447,13 @@ int main() {
     query_mpv_props();
 
     // Keep refreshing the overlay so mpv doesn't drop it.
-    LOG("TEST: entering hold loop (overlay-add every 2 s)");
+    // OPTIMIZATION: Reduced socket communication frequency (was every 2s, now every 10s)
+    // This reduces IPC overhead and mpv socket load while maintaining visual output.
+    LOG("TEST: entering hold loop (overlay-add every 10 s - optimized)");
     while (true) {
         draw_test_box();
         present_overlay();
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(10));
     }
 
     // Cleanup (unreachable in normal operation)
