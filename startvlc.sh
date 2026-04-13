@@ -42,7 +42,7 @@ sleep 5
 # --hwdec=auto  : use Pi hardware video decoder (saves CPU)
 # --no-terminal : suppress terminal output
 rm -f /tmp/mpvsock
-taskset -c 2 mpv --loop --fullscreen --no-terminal \
+taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
     --geometry=800x600 \
     --keepaspect=no \
