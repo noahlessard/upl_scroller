@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(CAIRO    REQUIRED cairo)
 pkg_check_modules(FREETYPE REQUIRED freetype2)
+pkg_check_modules(JPEG    REQUIRED libjpeg)
 
 file(GLOB SOURCES "src/*.cpp" "src/*.h")
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -20,7 +21,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME}
     ${CAIRO_LIBRARIES}
-    ${FREETYPE_LIBRARIES})
+    ${FREETYPE_LIBRARIES}
+    ${JPEG_LIBRARIES})
 
 # Paths baked into the binary at compile time
 target_compile_definitions(${PROJECT_NAME} PRIVATE

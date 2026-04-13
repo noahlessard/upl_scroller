@@ -17,6 +17,10 @@
 #include <cairo/cairo-ft.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include <cairo/cairo-svg.h>
+#include <cairo/cairo-pdf.h>
+#include <cairo/cairo-ps.h>
+#include <jpeglib.h>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -29,6 +33,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <string.h>
 #include <thread>
 #include <chrono>
 #include <string>
@@ -42,6 +47,7 @@ int              g_mpv_sock = -1;
 static FT_Library          g_ft_lib   = nullptr;
 static FT_Face             g_ft_face  = nullptr;
 static cairo_font_face_t*  g_font     = nullptr;
+static cairo_surface_t*    g_img_surface = nullptr;
 static uint8_t*            g_shm_data = nullptr;
 static int                 g_shm_size = 0;
 
@@ -336,6 +342,80 @@ static bool init_shm_cairo() {
     return true;
 }
 
+static bool load_jpeg(const char* path) {
+    LOG("loading JPEG from %s", path);
+    FILE* fp = fopen(path, "rb");
+    if (!fp) {
+        LOG("failed to open %s", path);
+        return false;
+    }
+
+    // Initialize JPEG struct
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_decompress(&cinfo);
+
+    jpeg_stdio_src(&cinfo, fp);
+    jpeg_read_header(&cinfo, TRUE);
+    jpeg_start_decompress(&cinfo);
+
+    int width = cinfo.output_width;
+    int height = cinfo.output_height;
+
+    // Limit to 100x100 as requested
+    int target_w = 100;
+    int target_h = 100;
+    
+    if (width > target_w || height > target_h) {
+        float scale = (float)target_w / width;
+        if (scale * height > target_h) {
+            scale = (float)target_h / height;
+        }
+        width = (int)(target_w * scale);
+        height = (int)(target_h * scale);
+    }
+
+    // Create cairo surface with the scaled size
+    int stride = width * 4;
+    unsigned char* pixels = (unsigned char*)calloc(width * height * 4, 1);
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    unsigned char* surf_pixels = (unsigned char*)cairo_image_surface_get_data(surf);
+
+    // Scanlines from bottom to top for cairo (ARGB32 is bottom-up)
+    int row_stride = width * 3;
+    unsigned char* row = (unsigned char*)malloc(row_stride);
+    while (cinfo.output_scanline < cinfo.output_height) {
+        jpeg_read_scanlines(&cinfo, &row, 1);
+        // Convert to ARGB32 format (flip vertically)
+        int src_y = cinfo.output_scanline - 1;
+        int dst_y = height - 1 - (src_y / ((int)cinfo.output_height / height));
+        if (dst_y >= 0 && dst_y < height) {
+            for (int x = 0; x < width; x++) {
+                int src_x = (int)((float)x / width * cinfo.output_width);
+                unsigned char* src_pixel = row + src_x * 3;
+                unsigned char* dst_pixel = surf_pixels + (dst_y * width + x) * 4;
+                // RGB to BGRA (ARGB32 LE = B G R A)
+                dst_pixel[0] = src_pixel[2];  // B
+                dst_pixel[1] = src_pixel[1];  // G
+                dst_pixel[2] = src_pixel[0];  // R
+                dst_pixel[3] = 0xFF;          // A
+            }
+        }
+    }
+
+    free(row);
+    free(pixels);
+    jpeg_finish_decompress(&cinfo);
+    jpeg_destroy_decompress(&cinfo);
+    fclose(fp);
+
+    LOG("loaded JPEG %dx%d -> scaled to %dx%d", 
+        cinfo.output_width, cinfo.output_height, width, height);
+    g_img_surface = surf;
+    return true;
+}
+
 static bool init_font() {
     if (FT_Init_FreeType(&g_ft_lib))                    return false;
     if (FT_New_Face(g_ft_lib, FONT_TTF, 0, &g_ft_face)) return false;
@@ -384,12 +464,43 @@ static void query_mpv_props() {
     drain_mpv_replies();
 }
 
-// Draw a SOLID magenta box covering the ENTIRE overlay - no transparency.
-// Cairo premultiplied ARGB32 LE for magenta (R=1,G=0,B=1,A=1):
-//   bytes: B=0xFF G=0x00 R=0xFF A=0xFF → MPV bgra = magenta, fully opaque.
+// Draw the JPEG image at top-left corner (100x100 pixels)
 static void draw_test_box() {
-    cairo_set_source_rgba(g_cr, 1, 0, 1, 1);   // magenta, fully opaque
-    cairo_paint(g_cr);                          // fill every pixel
+    if (g_img_surface) {
+        // Get dimensions of the loaded image
+        int img_w = (int)cairo_image_surface_get_width(g_img_surface);
+        int img_h = (int)cairo_image_surface_get_height(g_img_surface);
+        
+        // Draw at top-left (0, 0) with 100x100 size
+        int target_x = 0;
+        int target_y = 0;
+        int target_w = 100;
+        int target_h = 100;
+        
+        // Scale the image to fit within 100x100 while maintaining aspect ratio
+        float scale = (float)target_w / img_w;
+        if (scale * img_h > target_h) {
+            scale = (float)target_h / img_h;
+        }
+        target_w = (int)(img_w * scale);
+        target_h = (int)(img_h * scale);
+        
+        // Center within the 100x100 area
+        target_x = (target_w < 100) ? (100 - target_w) / 2 : 0;
+        target_y = (target_h < 100) ? (100 - target_h) / 2 : 0;
+        
+        LOG("drawing JPEG at (%d,%d) size %dx%d", target_x, target_y, target_w, target_h);
+        
+        // Clear to transparent
+        clear_to_transparent();
+        
+        // Draw the JPEG image
+        cairo_set_source_surface(g_cr, g_img_surface, target_x, target_y);
+        cairo_paint(g_cr);
+    } else {
+        LOG("no image surface, clearing overlay");
+        clear_to_transparent();
+    }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -412,6 +523,31 @@ int main() {
     }
     LOG("init_font OK (%s)", FONT_TTF);
 
+    // Load the JPEG image for the overlay (relative to source dir)
+    const char* jpg_path = FONT_TTF;  // This is in CMAKE_SOURCE_DIR
+    // Replace filename with soggy.jpg
+    char jpg_path_buf[512];
+    strncpy(jpg_path_buf, jpg_path, sizeof(jpg_path_buf) - 1);
+    char* last_slash = strrchr(jpg_path_buf, '/');
+    if (last_slash) {
+        strcpy(last_slash + 1, "soggy.jpg");
+    }
+    if (!load_jpeg(jpg_path_buf)) {
+        LOG("WARNING: Failed to load soggy.jpg, will use placeholder");
+        // Create a placeholder 100x100 green square as fallback
+        g_img_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100);
+        cairo_t* cr = cairo_create(g_img_surface);
+        cairo_set_source_rgba(cr, 0, 1, 0, 1);
+        cairo_paint(cr);
+        cairo_destroy(cr);
+        LOG("created green placeholder");
+    } else {
+        LOG("JPEG loaded successfully at %p", (void*)g_img_surface);
+        int img_w = (int)cairo_image_surface_get_width(g_img_surface);
+        int img_h = (int)cairo_image_surface_get_height(g_img_surface);
+        LOG("image dimensions: %dx%d", img_w, img_h);
+    }
+
     if (!connect_mpv()) {
         LOG("FATAL: connect_mpv failed - is mpv running with "
                 "--input-ipc-server=%s ? check /tmp/mpv.log", MPV_SOCK);
@@ -423,11 +559,9 @@ int main() {
     query_mpv_props();
 
     // ── Simple test loop ──────────────────────────────────────────────────────
-    // Paint the ENTIRE overlay magenta (no transparency) and hold for 5 s.
+    // Draw the JPEG image at top-left (100x100) and hold for 5 s.
     // If ANYTHING appears on screen the overlay pipeline is working.
-    // If pixels below are non-zero but nothing shows, the issue is in mpv's VO.
-    LOG("TEST: drawing solid magenta box (%dx%d) at video pos (%d,%d)",
-            OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y);
+    LOG("TEST: displaying JPEG at top-left (%dx%d)", OVERLAY_W, OVERLAY_H);
     draw_test_box();
     cairo_surface_flush(g_surface);
     msync(g_shm_data, g_shm_size, MS_SYNC);
@@ -457,6 +591,10 @@ int main() {
     }
 
     // Cleanup (unreachable in normal operation)
+    if (g_img_surface) {
+        cairo_surface_destroy(g_img_surface);
+        g_img_surface = nullptr;
+    }
     cairo_font_face_destroy(g_font);
     cairo_destroy(g_cr);
     cairo_surface_destroy(g_surface);
