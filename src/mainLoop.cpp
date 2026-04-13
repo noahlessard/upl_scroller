@@ -58,23 +58,25 @@ static void log_open() {
 }
 
 static void log_msg(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
 #if ENABLE_LOGGING
-    if (!g_log) return;
+    if (!g_log) {
+        va_end(ap);
+        return;
+    }
     time_t now = time(nullptr);
     struct tm tmv;
     localtime_r(&now, &tmv);
     fprintf(g_log, "[%02d:%02d:%02d] ",
             tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
-    va_list ap;
-    va_start(ap, fmt);
     vfprintf(g_log, fmt, ap);
-    va_end(ap);
     fputc('\n', g_log);
     fflush(g_log);
 #else
     (void)fmt;
-    (void)ap;
 #endif
+    va_end(ap);
 }
 
 // Drain any pending bytes from mpv (responses / events) into the log.
