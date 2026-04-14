@@ -468,6 +468,8 @@ static void query_mpv_props() {
     drain_mpv_replies();
 }
 
+static void draw_test_box();  // forward declaration
+
 // Bounce the image around the overlay area (TV logo style)
 static void update_bounce_position() {
     if (!g_bounce_enabled || !g_img_surface) return;
