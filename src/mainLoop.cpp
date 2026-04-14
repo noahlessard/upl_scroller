@@ -55,6 +55,13 @@ static constexpr const char* SHM_PATH = "/dev/shm/overlay.bgra";
 static constexpr const char* MPV_SOCK = "/tmp/mpvsock";
 static constexpr const char* LOG_PATH = "/tmp/upl_scroller.log";
 
+// Bouncing animation globals
+static double  g_bounce_x = 0.0;
+static double  g_bounce_y = 0.0;
+static double  g_bounce_vx = 2.0;  // pixels per frame
+static double  g_bounce_vy = 2.0;  // pixels per frame
+static bool    g_bounce_enabled = false;
+
 // ── Logging ───────────────────────────────────────────────────────────────────
 static FILE* g_log = nullptr;
 
@@ -461,7 +468,97 @@ static void query_mpv_props() {
     drain_mpv_replies();
 }
 
-// Draw the JPEG image at top-left corner (100x100 pixels)
+// Bounce the image around the overlay area (TV logo style)
+static void update_bounce_position() {
+    if (!g_bounce_enabled || !g_img_surface) return;
+    
+    // Get image dimensions (scaled)
+    int img_w = (int)cairo_image_surface_get_width(g_img_surface);
+    int img_h = (int)cairo_image_surface_get_height(g_img_surface);
+    
+    // Scale image to fit (same logic as before)
+    int target_w = 100;
+    int target_h = 100;
+    float scale = (float)target_w / img_w;
+    if (scale * img_h > target_h) {
+        scale = (float)target_h / img_h;
+    }
+    target_w = (int)(img_w * scale);
+    target_h = (int)(img_h * scale);
+    
+    // Update position
+    g_bounce_x += g_bounce_vx;
+    g_bounce_y += g_bounce_vy;
+    
+    // Bounce off right edge
+    if (g_bounce_x + target_w >= OVERLAY_W) {
+        g_bounce_x = OVERLAY_W - target_w;
+        g_bounce_vx = -g_bounce_vx;
+        LOG("bounce: hit RIGHT edge at x=%d (vx=%g -> %g)", 
+            (int)g_bounce_x, g_bounce_vx, -g_bounce_vx);
+    }
+    // Bounce off left edge
+    if (g_bounce_x <= 0) {
+        g_bounce_x = 0;
+        g_bounce_vx = -g_bounce_vx;
+        LOG("bounce: hit LEFT edge at x=%d (vx=%g -> %g)",
+            (int)g_bounce_x, g_bounce_vx, -g_bounce_vx);
+    }
+    // Bounce off bottom edge
+    if (g_bounce_y + target_h >= OVERLAY_H) {
+        g_bounce_y = OVERLAY_H - target_h;
+        g_bounce_vy = -g_bounce_vy;
+        LOG("bounce: hit BOTTOM edge at y=%d (vy=%g -> %g)",
+            (int)g_bounce_y, g_bounce_vy, -g_bounce_vy);
+    }
+    // Bounce off top edge
+    if (g_bounce_y <= 0) {
+        g_bounce_y = 0;
+        g_bounce_vy = -g_bounce_vy;
+        LOG("bounce: hit TOP edge at y=%d (vy=%g -> %g)",
+            (int)g_bounce_y, g_bounce_vy, -g_bounce_vy);
+    }
+}
+
+// Draw the JPEG image with bouncing animation enabled
+static void draw_bouncing_image() {
+    if (!g_bounce_enabled) {
+        draw_test_box();  // Use original static position
+        return;
+    }
+    
+    if (!g_img_surface) {
+        LOG("no image surface, clearing overlay");
+        clear_to_transparent();
+        return;
+    }
+    
+    // Get dimensions of the loaded image
+    int img_w = (int)cairo_image_surface_get_width(g_img_surface);
+    int img_h = (int)cairo_image_surface_get_height(g_img_surface);
+    
+    // Scale image to fit within 100x100 while maintaining aspect ratio
+    int target_w = 100;
+    int target_h = 100;
+    float scale = (float)target_w / img_w;
+    if (scale * img_h > target_h) {
+        scale = (float)target_h / img_h;
+    }
+    target_w = (int)(img_w * scale);
+    target_h = (int)(img_h * scale);
+    
+    LOG("bouncing at (%.1f,%.1f) size %dx%d, vx=%g vy=%g",
+        g_bounce_x, g_bounce_y, target_w, target_h, g_bounce_vx, g_bounce_vy);
+    
+    // Clear to transparent
+    clear_to_transparent();
+    
+    // Draw the JPEG image at current bouncing position
+    cairo_set_source_surface(g_cr, g_img_surface, g_bounce_x, g_bounce_y);
+    cairo_paint(g_cr);
+}
+
+// Draw the JPEG image at top-left corner (100x100 pixels) - static version
 static void draw_test_box() {
     if (g_img_surface) {
         // Get dimensions of the loaded image
@@ -555,7 +652,16 @@ int main() {
     LOG("querying mpv properties...");
     query_mpv_props();
 
-    // ── Simple test loop ──────────────────────────────────────────────────────
+    // ── Bouncing animation test loop ──────────────────────────────────────────
+    // Enable bouncing animation to test all screen edges
+    g_bounce_enabled = true;
+    g_bounce_x = 0.0;
+    g_bounce_y = 0.0;
+    g_bounce_vx = 2.0;  // pixels per frame (~30fps)
+    g_bounce_vy = 2.0;
+    
+    LOG("Bouncing animation enabled, bounds %dx%d", OVERLAY_W, OVERLAY_H);
+    
     // Draw the JPEG image at top-left (100x100) and hold for 5 s.
     // If ANYTHING appears on screen the overlay pipeline is working.
     LOG("TEST: displaying JPEG at top-left (%dx%d)", OVERLAY_W, OVERLAY_H);
@@ -577,12 +683,14 @@ int main() {
     LOG("re-querying mpv properties (VO should be running now)...");
     query_mpv_props();
 
-    // Keep refreshing the overlay so mpv doesn't drop it.
+    // ── Bouncing animation loop ───────────────────────────────────────────────
+    // Keep refreshing the overlay so mpv doesn't drop it, with bouncing animation.
     // OPTIMIZATION: Reduced socket communication frequency (was every 2s, now every 10s)
     // This reduces IPC overhead and mpv socket load while maintaining visual output.
-    LOG("TEST: entering hold loop (overlay-add every 10 s - optimized)");
+    LOG("Bouncing animation loop started (overlay-add every 10 s - optimized)");
     while (true) {
-        draw_test_box();
+        update_bounce_position();
+        draw_bouncing_image();
         present_overlay();
         std::this_thread::sleep_for(std::chrono::seconds(10));
     }
