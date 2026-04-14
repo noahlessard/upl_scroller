@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <chrono>
+#include <cstdio>
 
 static constexpr const char* LOG_PATH = "/tmp/upl_scroller.log";
 

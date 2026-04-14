@@ -18,7 +18,7 @@ static float       g_scroll_x     = (float)OVERLAY_W;  // Start off-screen right
 static constexpr float g_scroll_speed = SCROLL_SPEED_PX;  // pixels per frame
 static constexpr int   g_wait_duration_frames = 100;    // 100 frames = 10 seconds at 100ms
 static int             g_wait_frames_remaining = 0;
-static constexpr const char* g_scroll_text = "UPL TRAIN CAM";
+static constexpr const char* g_scroll_text = "UPL TRAIN CAM - 24 HOURS A DAY";
 static float           g_text_width = 0.0f;
 static int             g_text_baseline = 0;
 
@@ -55,23 +55,22 @@ bool scroll_update() {
 
 // ── Draw scroll bar (call after bounce_draw) ──────────────────────────────────
 void scroll_draw() {
-    if (g_scroll_state == ScrollState::Scrolling) {
-        // Draw green background for scroll bar
-        cairo_set_source_rgba(g_cr, 0.0f, 1.0f, 0.0f, 1.0f);  // Green
-        cairo_rectangle(g_cr,
-            SIDE_BORDER_W,
-            OVERLAY_H - BOTTOM_BAR_H,
-            OVERLAY_W - 2 * SIDE_BORDER_W,
-            BOTTOM_BAR_H);
-        cairo_fill(g_cr);
+    // Always draw green background (extends full width to cover under side borders)
+    cairo_set_source_rgba(g_cr, 0.0f, 1.0f, 0.0f, 1.0f);  // Green
+    cairo_rectangle(g_cr,
+        0,
+        OVERLAY_H - BOTTOM_BAR_H,
+        OVERLAY_W,
+        BOTTOM_BAR_H);
+    cairo_fill(g_cr);
 
+    if (g_scroll_state == ScrollState::Scrolling) {
         // Draw scrolling text on green background
         cairo_set_font_size(g_cr, TICKER_FONT_SZ);
         cairo_set_source_rgba(g_cr, 0.0f, 0.0f, 0.0f, 1.0f);  // Black text
         cairo_move_to(g_cr, g_scroll_x, (float)g_text_baseline);
         cairo_show_text(g_cr, g_scroll_text);
     }
-    // else: solid green background (no additional drawing needed)
 }
 
 // ── Shutdown scrolling ────────────────────────────────────────────────────────
