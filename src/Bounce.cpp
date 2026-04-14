@@ -5,6 +5,11 @@
 #include "Logging.h"
 
 #include <cairo/cairo.h>
+#include <dirent.h>
+#include <cstring>
+#include <chrono>
+#include <random>
+#include <algorithm>
 
 // Bouncing animation globals
 static double  g_bounce_x = 0.0;
@@ -14,6 +19,11 @@ static double  g_bounce_vy = 2.0;
 static bool    g_bounce_enabled = false;
 
 static cairo_surface_t* g_img_surface = nullptr;
+
+// Random image support
+static std::vector<const char*> g_image_paths;
+static std::chrono::steady_clock::time_point g_last_image_change;
+static constexpr int IMAGE_CHANGE_INTERVAL_SEC = 600;  // 10 minutes
 
 static void log_bounce_event(const char* edge, double x, double vx) {
     LOG("bounce: hit %s edge at x=%.0f (vx=%.1f -> %.1f)",
@@ -27,24 +37,91 @@ void bounce_init(bool enabled) {
     g_bounce_vx = 2.0;
     g_bounce_vy = 2.0;
     g_img_surface = nullptr;
+    g_image_paths.clear();
+    g_last_image_change = std::chrono::steady_clock::now();
+    // Scan for images on startup
+    bounce_scan_images("/static");
+    if (!g_image_paths.empty()) {
+        bounce_load_random_image();
+    }
 }
 
-void bounce_load_image(const char* path) {
-    if (path && !g_img_surface) {
-        g_img_surface = image_load_jpeg(path, 100, 100);
-        if (g_img_surface) {
-            LOG("loaded bouncing image %dx%d",
-                (int)cairo_image_surface_get_width(g_img_surface),
-                (int)cairo_image_surface_get_height(g_img_surface));
-        } else {
-            LOG("failed to load bouncing image %s, using placeholder", path);
-            g_img_surface = image_create_placeholder(100, 100);
+void bounce_scan_images(const char* folder) {
+    g_image_paths.clear();
+    DIR* dir = opendir(folder);
+    if (!dir) {
+        LOG("failed to open folder %s: %s", folder, strerror(errno));
+        return;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        const char* name = entry->d_name;
+        // Check for .jpg or .jpeg extension (case-insensitive)
+        size_t len = strlen(name);
+        if (len > 4 && (strcmp(name + len - 4, ".jpg") == 0 ||
+                        strcmp(name + len - 5, ".jpeg") == 0)) {
+            // Create a copy of the filename for the path
+            char full_path[512];
+            snprintf(full_path, sizeof(full_path), "%s/%s", folder, name);
+            g_image_paths.push_back(strdup(full_path));
+            LOG("found image: %s", full_path);
         }
     }
+    closedir(dir);
+    LOG("scanned %zu images in %s", g_image_paths.size(), folder);
+}
+
+const std::vector<const char*>& bounce_get_images() {
+    return g_image_paths;
+}
+
+void bounce_load_random_image() {
+    if (g_image_paths.empty()) {
+        LOG("no images found, using placeholder");
+        g_img_surface = image_create_placeholder(100, 100);
+        return;
+    }
+
+    // Pick random index
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> dist(0, g_image_paths.size() - 1);
+    size_t idx = dist(gen);
+
+    const char* path = g_image_paths[idx];
+    LOG("loading random image %s (index %zu of %zu)", path, idx, g_image_paths.size());
+
+    // Destroy current surface
+    if (g_img_surface) {
+        cairo_surface_destroy(g_img_surface);
+        g_img_surface = nullptr;
+    }
+
+    // Load new image
+    g_img_surface = image_load_jpeg(path, 100, 100);
+    if (g_img_surface) {
+        LOG("loaded bouncing image %dx%d",
+            (int)cairo_image_surface_get_width(g_img_surface),
+            (int)cairo_image_surface_get_height(g_img_surface));
+    } else {
+        LOG("failed to load bouncing image %s, using placeholder", path);
+        g_img_surface = image_create_placeholder(100, 100);
+    }
+
+    g_last_image_change = std::chrono::steady_clock::now();
 }
 
 bool bounce_update() {
     if (!g_bounce_enabled || !g_img_surface) return false;
+
+    // Check if it's time to load a new random image (every 10 minutes)
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_last_image_change).count();
+    if (elapsed >= IMAGE_CHANGE_INTERVAL_SEC && !g_image_paths.empty()) {
+        LOG("time to pick new random image (elapsed: %d seconds)", (int)elapsed);
+        bounce_load_random_image();
+    }
 
     // image_load_jpeg already scaled to fit 100x100, so surface dims are final
     int img_w = (int)cairo_image_surface_get_width(g_img_surface);
@@ -110,5 +187,10 @@ void bounce_shutdown() {
         cairo_surface_destroy(g_img_surface);
         g_img_surface = nullptr;
     }
+    // Free image paths
+    for (const char* path : g_image_paths) {
+        free((void*)path);
+    }
+    g_image_paths.clear();
     g_bounce_enabled = false;
 }

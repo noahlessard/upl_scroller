@@ -107,7 +107,7 @@ int main() {
     // ── Test phase: display static image for 5 seconds ────────────────────────
     LOG("TEST: displaying image at top-left corner");
 
-    const char* jpg_path = "soggy.jpg";
+    const char* jpg_path = "/static/soggy.jpg";
     cairo_surface_t* img = image_load_jpeg(jpg_path, 100, 100);
     if (!img) {
         LOG("WARNING: Failed to load soggy.jpg, using green placeholder");
@@ -141,8 +141,7 @@ int main() {
 
     // ── Start bouncing animation loop ─────────────────────────────────────────
     LOG("starting bouncing animation loop");
-    bounce_init(true);
-    bounce_load_image("soggy.jpg");
+    bounce_init(true);  // Scans /static and loads random image automatically
 
     // Main loop: keep refreshing so mpv doesn't drop overlay
     // Frame rate: 100ms (~10fps) with bouncing animation and scrolling text
