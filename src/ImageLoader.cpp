@@ -5,6 +5,7 @@
 #include <jpeglib.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstddef>
 
 cairo_surface_t* image_load_jpeg(const char* path, int max_w, int max_h) {
     LOG("loading JPEG from %s", path);

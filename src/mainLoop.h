@@ -25,7 +25,7 @@ constexpr float SCROLL_SPEED_PX = 3.0f;  // pixels per frame
 constexpr int   FRAME_MS        = 33;    // ~30 fps
 
 // ── Font path ─────────────────────────────────────────────────────────────────
-constexpr const char* FONT_TTF = "pix.ttf";
+const char* const FONT_TTF = "pix.ttf";
 
 // ── Shared Cairo state (defined in mainLoop.cpp, used by modules) ────────────
 extern cairo_surface_t* g_surface;
