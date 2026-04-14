@@ -1,7 +1,6 @@
 #pragma once
 #include <cairo/cairo.h>
 #include <string_view>
-#include <vector>
 #include <string>
 
 // ── Overlay geometry (800×600 display) ───────────────────────────────────────
@@ -25,12 +24,10 @@ constexpr double ALERT_BODY_SZ      = 10.0;
 constexpr float SCROLL_SPEED_PX = 3.0f;  // pixels per frame
 constexpr int   FRAME_MS        = 33;    // ~30 fps
 
-// ── Shared Cairo state (defined in mainLoop.cpp) ─────────────────────────────
+// ── Font path ─────────────────────────────────────────────────────────────────
+constexpr const char* FONT_TTF = "pix.ttf";
+
+// ── Shared Cairo state (defined in mainLoop.cpp, used by modules) ────────────
 extern cairo_surface_t* g_surface;
 extern cairo_t*         g_cr;
 extern int              g_mpv_sock;
-
-// ── API used by scroll.cpp ────────────────────────────────────────────────────
-void present_overlay();
-void draw_border(bool show_bottom_label);
-void create_alert(std::string_view title, std::string_view body, float duration_s);

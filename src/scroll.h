@@ -19,5 +19,5 @@ struct ScrollText {
     ScrollText(std::string_view text, int y_px, float speed_px, Dir dir);
 };
 
-// Runs all scrolls concurrently until every one has scrolled off screen.
-void run_scrolls(std::vector<ScrollText>& scrolls);
+// Run scrolling text with given scrolls (blocks until done)
+void scroll_run(std::vector<ScrollText>& scrolls);

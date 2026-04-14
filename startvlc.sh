@@ -31,12 +31,12 @@ screen_unblank() {
 }
 
 # Initialize: unblank screen and unmute audio
-screen_unblank
+#screen_unblank
 
 # Start audio loop
-taskset -c 2 cvlc --loop /media/upl/W/train.m4a &
+#taskset -c 2 cvlc --loop /media/upl/W/train.m4a &
 
-sleep 5
+#sleep 5
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 # --hwdec=auto  : use Pi hardware video decoder (saves CPU)
@@ -52,7 +52,7 @@ taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     /media/upl/W/train.mp4 \
     >/tmp/mpv.log 2>&1 &
 
-sleep 5
+#sleep 5
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
 cd /home/upl/upl_scroller

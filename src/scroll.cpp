@@ -1,5 +1,7 @@
 #include "scroll.h"
 #include "mainLoop.h"
+#include "CairoOverlay.h"
+#include "MpvIpc.h"
 
 #include <cairo/cairo.h>
 #include <unistd.h>
@@ -8,24 +10,17 @@
 ScrollText::ScrollText(std::string_view text_, int y_px, float speed_px, Dir dir_)
     : text(text_), y(y_px), speed(speed_px), dir(dir_), done(false)
 {
-    // Measure rendered width at ticker font size so we know when it's off-screen
     cairo_set_font_size(g_cr, TICKER_FONT_SZ);
     cairo_text_extents_t ext;
     cairo_text_extents(g_cr, text.c_str(), &ext);
     text_w = (float)ext.width;
-
-    // Start just off the edge the text will scroll in from
     x = (dir == Dir::Left) ? (float)OVERLAY_W : -text_w;
 }
 
-// ── run_scrolls ───────────────────────────────────────────────────────────────
-void run_scrolls(std::vector<ScrollText>& scrolls) {
+void scroll_run(std::vector<ScrollText>& scrolls) {
     while (true) {
-        // Redraw the frame border without the static bottom label
-        draw_border(false);
+        cairo_draw_border(false);
 
-        // Clip drawing to the bottom bar so text can't bleed into
-        // the transparent middle section
         cairo_save(g_cr);
         cairo_rectangle(g_cr,
             SIDE_BORDER_W,
@@ -35,7 +30,7 @@ void run_scrolls(std::vector<ScrollText>& scrolls) {
         cairo_clip(g_cr);
 
         cairo_set_font_size(g_cr, TICKER_FONT_SZ);
-        cairo_set_source_rgba(g_cr, 0, 0, 0, 1);   // black text on the green bar
+        cairo_set_source_rgba(g_cr, 0, 0, 0, 1);
 
         for (auto& s : scrolls) {
             if (!s.done) {
@@ -45,19 +40,15 @@ void run_scrolls(std::vector<ScrollText>& scrolls) {
         }
 
         cairo_restore(g_cr);
-        present_overlay();
+        mpv_present_overlay();
 
-        // Advance positions and check completion
         bool all_done = true;
         for (auto& s : scrolls) {
             if (s.done) continue;
-
             s.x += (s.dir == Dir::Left) ? -s.speed : s.speed;
-
             s.done = (s.dir == Dir::Left)
                 ? (s.x + s.text_w < 0)
                 : (s.x > OVERLAY_W);
-
             if (!s.done) all_done = false;
         }
 
