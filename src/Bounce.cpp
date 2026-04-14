@@ -76,6 +76,21 @@ const std::vector<const char*>& bounce_get_images() {
     return g_image_paths;
 }
 
+cairo_surface_t* bounce_get_current_surface() {
+    return g_img_surface;
+}
+
+size_t bounce_get_image_count() {
+    return g_image_paths.size();
+}
+
+void bounce_clear_image_paths() {
+    for (const char* path : g_image_paths) {
+        free((void*)path);
+    }
+    g_image_paths.clear();
+}
+
 void bounce_load_random_image() {
     if (g_image_paths.empty()) {
         LOG("no images found, using placeholder");

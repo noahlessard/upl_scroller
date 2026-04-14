@@ -110,7 +110,7 @@ int main() {
     // Scan for images and load a random one using bounce infrastructure
     bounce_scan_images("static");
     bounce_load_random_image();  // This sets g_img_surface to a random image
-    cairo_surface_t* img = g_img_surface;
+    cairo_surface_t* img = bounce_get_current_surface();
     if (!img) {
         LOG("No images available, using green placeholder");
         img = image_create_placeholder(100, 100);
@@ -134,11 +134,13 @@ int main() {
         cairo_surface_destroy(img);
     }
 
-    // Clear test phase resources before bounce_init
-    if (g_img_surface) {
-        cairo_surface_destroy(g_img_surface);
-        g_img_surface = nullptr;
+    // Destroy the test image - bounce_init will load a new one
+    if (img) {
+        cairo_surface_destroy(img);
+        img = nullptr;
     }
+    // Clear image paths - bounce_init will scan and load fresh
+    bounce_clear_image_paths();
     for (const char* path : g_image_paths) {
         free((void*)path);
     }
