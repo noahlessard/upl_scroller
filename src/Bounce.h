@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <cairo/cairo.h>
 
 // Initialize bouncing animation (can be disabled)
 void bounce_init(bool enabled);
