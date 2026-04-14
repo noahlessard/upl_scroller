@@ -141,10 +141,6 @@ int main() {
     }
     // Clear image paths - bounce_init will scan and load fresh
     bounce_clear_image_paths();
-    for (const char* path : g_image_paths) {
-        free((void*)path);
-    }
-    g_image_paths.clear();
 
     // Drain mpv responses
     drain_mpv_replies();
