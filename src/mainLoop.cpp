@@ -107,7 +107,7 @@ int main() {
     // ── Test phase: display static image for 5 seconds ────────────────────────
     LOG("TEST: displaying image at top-left corner");
 
-    const char* jpg_path = "/static/soggy.jpg";
+    const char* jpg_path = "static/soggy.jpg";
     cairo_surface_t* img = image_load_jpeg(jpg_path, 100, 100);
     if (!img) {
         LOG("WARNING: Failed to load soggy.jpg, using green placeholder");

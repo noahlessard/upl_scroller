@@ -40,7 +40,7 @@ void bounce_init(bool enabled) {
     g_image_paths.clear();
     g_last_image_change = std::chrono::steady_clock::now();
     // Scan for images on startup
-    bounce_scan_images("/static");
+    bounce_scan_images("static");
     if (!g_image_paths.empty()) {
         bounce_load_random_image();
     }
