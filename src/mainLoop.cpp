@@ -689,12 +689,12 @@ int main() {
     // Keep refreshing the overlay so mpv doesn't drop it, with bouncing animation.
     // OPTIMIZATION: Reduced socket communication frequency (was every 2s, now every 10s)
     // This reduces IPC overhead and mpv socket load while maintaining visual output.
-    LOG("Bouncing animation loop started (overlay-add every 10 s - optimized)");
+    LOG("Bouncing animation loop started (100 ms frame rate - smooth)");
     while (true) {
         update_bounce_position();
         draw_bouncing_image();
         present_overlay();
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // Cleanup (unreachable in normal operation)
