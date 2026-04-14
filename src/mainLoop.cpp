@@ -350,7 +350,6 @@ static bool load_jpeg(const char* path) {
         return false;
     }
 
-    // Initialize JPEG struct
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
     cinfo.err = jpeg_std_error(&jerr);
@@ -360,41 +359,39 @@ static bool load_jpeg(const char* path) {
     jpeg_read_header(&cinfo, TRUE);
     jpeg_start_decompress(&cinfo);
 
-    int width = cinfo.output_width;
-    int height = cinfo.output_height;
+    int src_w = (int)cinfo.output_width;
+    int src_h = (int)cinfo.output_height;
+    int width  = src_w;
+    int height = src_h;
 
-    // Limit to 100x100 as requested
+    // Scale down to fit within 100x100, preserving aspect ratio
     int target_w = 100;
     int target_h = 100;
-    
     if (width > target_w || height > target_h) {
         float scale = (float)target_w / width;
-        if (scale * height > target_h) {
+        if (scale * height > target_h)
             scale = (float)target_h / height;
-        }
-        width = (int)(target_w * scale);
-        height = (int)(target_h * scale);
+        width  = (int)(width  * scale);  // Fix: was target_w * scale
+        height = (int)(height * scale);  // Fix: was target_h * scale
     }
 
     // Create cairo surface with the scaled size
-    int stride = width * 4;
-    unsigned char* pixels = (unsigned char*)calloc(width * height * 4, 1);
     cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    unsigned char* surf_pixels = (unsigned char*)cairo_image_surface_get_data(surf);
+    int surf_stride = cairo_image_surface_get_stride(surf);  // Fix: use actual stride (may be padded)
+    unsigned char* surf_pixels = cairo_image_surface_get_data(surf);
 
-    // Scanlines from bottom to top for cairo (ARGB32 is bottom-up)
-    int row_stride = width * 3;
-    unsigned char* row = (unsigned char*)malloc(row_stride);
-    while (cinfo.output_scanline < cinfo.output_height) {
+    // Row buffer must hold a full-width source scanline, not the scaled width
+    unsigned char* row = (unsigned char*)malloc(src_w * 3);  // Fix: was width * 3 (too small)
+    while (cinfo.output_scanline < (unsigned int)src_h) {
         jpeg_read_scanlines(&cinfo, &row, 1);
-        // Convert to ARGB32 format (flip vertically)
-        int src_y = cinfo.output_scanline - 1;
-        int dst_y = height - 1 - (src_y / ((int)cinfo.output_height / height));
+        int src_y = (int)cinfo.output_scanline - 1;
+        // Cairo ARGB32 is top-down like JPEG — no vertical flip needed
+        int dst_y = (int)((float)src_y / src_h * height);  // Fix: correct linear mapping
         if (dst_y >= 0 && dst_y < height) {
             for (int x = 0; x < width; x++) {
-                int src_x = (int)((float)x / width * cinfo.output_width);
+                int src_x = (int)((float)x / width * src_w);
                 unsigned char* src_pixel = row + src_x * 3;
-                unsigned char* dst_pixel = surf_pixels + (dst_y * width + x) * 4;
+                unsigned char* dst_pixel = surf_pixels + dst_y * surf_stride + x * 4;  // Fix: use surf_stride
                 // RGB to BGRA (ARGB32 LE = B G R A)
                 dst_pixel[0] = src_pixel[2];  // B
                 dst_pixel[1] = src_pixel[1];  // G
@@ -405,13 +402,13 @@ static bool load_jpeg(const char* path) {
     }
 
     free(row);
-    free(pixels);
     jpeg_finish_decompress(&cinfo);
     jpeg_destroy_decompress(&cinfo);
     fclose(fp);
 
-    LOG("loaded JPEG %dx%d -> scaled to %dx%d", 
-        cinfo.output_width, cinfo.output_height, width, height);
+    cairo_surface_mark_dirty(surf);  // Fix: notify cairo of direct pixel writes
+
+    LOG("loaded JPEG %dx%d -> scaled to %dx%d", src_w, src_h, width, height);  // Fix: use saved dims (cinfo invalid after destroy)
     g_img_surface = surf;
     return true;
 }

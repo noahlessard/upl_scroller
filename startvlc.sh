@@ -46,8 +46,6 @@ sleep 5
 rm -f /tmp/mpvsock
 taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
-    --vo=gpu \
-    --gpu-context=egl \
     --geometry=800x600 \
     --keepaspect=no \
     --input-ipc-server=/tmp/mpvsock \

@@ -29,7 +29,7 @@ The project uses CMake as its build system. The `CMakeLists.txt` file defines th
 
 ```bash
 sudo apt-get update
-sudo apt-get install cmake g++ libnotcurses-dev
+sudo apt-get install cmake g++ libnotcurses-dev jpeglib-dev
 
 cmake -B build
 make -C build
