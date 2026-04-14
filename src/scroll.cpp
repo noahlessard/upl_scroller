@@ -6,53 +6,78 @@
 #include <cairo/cairo.h>
 #include <unistd.h>
 
-// ── Constructor ───────────────────────────────────────────────────────────────
-ScrollText::ScrollText(std::string_view text_, int y_px, float speed_px, Dir dir_)
-    : text(text_), y(y_px), speed(speed_px), dir(dir_), done(false)
-{
+// ── Scrolling state machine ───────────────────────────────────────────────────
+enum class ScrollState {
+    Scrolling,   // Text is moving left to right
+    Waiting,     // Solid green background, no text
+    Initialized
+};
+
+static ScrollState g_scroll_state = ScrollState::Initialized;
+static float       g_scroll_x     = (float)OVERLAY_W;  // Start off-screen right
+static constexpr float g_scroll_speed = SCROLL_SPEED_PX;  // pixels per frame
+static constexpr int   g_wait_duration_frames = 100;    // 100 frames = 10 seconds at 100ms
+static int             g_wait_frames_remaining = 0;
+static constexpr const char* g_scroll_text = "UPL TRAIN CAM";
+static float           g_text_width = 0.0f;
+static int             g_text_baseline = 0;
+
+// ── Initialize scrolling text (call once) ─────────────────────────────────────
+void scroll_init() {
     cairo_set_font_size(g_cr, TICKER_FONT_SZ);
     cairo_text_extents_t ext;
-    cairo_text_extents(g_cr, text.c_str(), &ext);
-    text_w = (float)ext.width;
-    x = (dir == Dir::Left) ? (float)OVERLAY_W : -text_w;
+    cairo_text_extents(g_cr, g_scroll_text, &ext);
+    g_text_width = (float)ext.width;
+    g_text_baseline = (int)(OVERLAY_H - BOTTOM_BAR_H + TICKER_FONT_SZ * 0.3);
+    g_scroll_state = ScrollState::Scrolling;
+    g_scroll_x = (float)OVERLAY_W;  // Start off-screen to the right
 }
 
-void scroll_run(std::vector<ScrollText>& scrolls) {
-    while (true) {
-        cairo_draw_border(false);
+// ── Update scroll state (call every frame) ────────────────────────────────────
+bool scroll_update() {
+    if (g_scroll_state == ScrollState::Scrolling) {
+        g_scroll_x -= g_scroll_speed;
+        if (g_scroll_x + g_text_width < 0) {
+            // Scrolling complete, wait 10 seconds
+            g_scroll_state = ScrollState::Waiting;
+            g_wait_frames_remaining = g_wait_duration_frames;
+        }
+    } else if (g_scroll_state == ScrollState::Waiting) {
+        g_wait_frames_remaining--;
+        if (g_wait_frames_remaining <= 0) {
+            // Wait complete, start scrolling again
+            g_scroll_state = ScrollState::Scrolling;
+            g_scroll_x = (float)OVERLAY_W;
+        }
+    }
+    return (g_scroll_state == ScrollState::Scrolling);
+}
 
-        cairo_save(g_cr);
+// ── Draw scroll bar (call after bounce_draw) ──────────────────────────────────
+void scroll_draw() {
+    if (g_scroll_state == ScrollState::Scrolling) {
+        // Draw green background for scroll bar
+        cairo_set_source_rgba(g_cr, 0.0f, 1.0f, 0.0f, 1.0f);  // Green
         cairo_rectangle(g_cr,
             SIDE_BORDER_W,
             OVERLAY_H - BOTTOM_BAR_H,
             OVERLAY_W - 2 * SIDE_BORDER_W,
             BOTTOM_BAR_H);
-        cairo_clip(g_cr);
+        cairo_fill(g_cr);
 
+        // Draw scrolling text on green background
         cairo_set_font_size(g_cr, TICKER_FONT_SZ);
-        cairo_set_source_rgba(g_cr, 0, 0, 0, 1);
-
-        for (auto& s : scrolls) {
-            if (!s.done) {
-                cairo_move_to(g_cr, s.x, s.y);
-                cairo_show_text(g_cr, s.text.c_str());
-            }
-        }
-
-        cairo_restore(g_cr);
-        mpv_present_overlay();
-
-        bool all_done = true;
-        for (auto& s : scrolls) {
-            if (s.done) continue;
-            s.x += (s.dir == Dir::Left) ? -s.speed : s.speed;
-            s.done = (s.dir == Dir::Left)
-                ? (s.x + s.text_w < 0)
-                : (s.x > OVERLAY_W);
-            if (!s.done) all_done = false;
-        }
-
-        if (all_done) break;
-        usleep(FRAME_MS * 1000);
+        cairo_set_source_rgba(g_cr, 0.0f, 0.0f, 0.0f, 1.0f);  // Black text
+        cairo_move_to(g_cr, g_scroll_x, (float)g_text_baseline);
+        cairo_show_text(g_cr, g_scroll_text);
     }
+    // else: solid green background (no additional drawing needed)
+}
+
+// ── Shutdown scrolling ────────────────────────────────────────────────────────
+void scroll_shutdown() {
+    g_scroll_state = ScrollState::Initialized;
+    g_scroll_x = 0.0f;
+    g_wait_frames_remaining = 0;
+    g_text_width = 0.0f;
 }

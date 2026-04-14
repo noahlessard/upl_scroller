@@ -5,6 +5,7 @@
 #include "ImageLoader.h"
 #include "Bounce.h"
 #include "FontLoader.h"
+#include "scroll.h"
 
 #include <cairo/cairo.h>
 #include <sys/mman.h>
@@ -88,6 +89,10 @@ int main() {
     font_init(FONT_TTF);
     LOG("font_init OK");
 
+    // Scroll
+    scroll_init();
+    LOG("scroll_init OK");
+
     // MPV connection
     if (!mpv_connect()) {
         LOG("FATAL: mpv_connect failed - is mpv running with "
@@ -140,15 +145,24 @@ int main() {
     bounce_load_image("soggy.jpg");
 
     // Main loop: keep refreshing so mpv doesn't drop overlay
-    // Frame rate: 100ms (~10fps) with bouncing animation
+    // Frame rate: 100ms (~10fps) with bouncing animation and scrolling text
     while (true) {
+        // Update animation states
         bounce_update();
+        scroll_update();
+
+        // Draw bouncing image (in front)
         bounce_draw();
+
+        // Draw scrolling text (behind image, at bottom)
+        scroll_draw();
+
         mpv_present_overlay();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // ── Cleanup (unreachable in normal operation) ──────────────────────────────
+    scroll_shutdown();
     bounce_shutdown();
     font_shutdown();
     mpv_shutdown();
