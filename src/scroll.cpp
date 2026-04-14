@@ -28,7 +28,7 @@ void scroll_init() {
     cairo_text_extents_t ext;
     cairo_text_extents(g_cr, g_scroll_text, &ext);
     g_text_width = (float)ext.width;
-    g_text_baseline = (int)(OVERLAY_H - BOTTOM_BAR_H + TICKER_FONT_SZ * 0.5);
+    g_text_baseline = (int)(OVERLAY_H - BOTTOM_BAR_H + TICKER_FONT_SZ * 1);
     g_scroll_state = ScrollState::Scrolling;
     g_scroll_x = (float)OVERLAY_W;  // Start off-screen to the right
 }

@@ -23,7 +23,7 @@ static cairo_surface_t* g_img_surface = nullptr;
 // Random image support
 static std::vector<const char*> g_image_paths;
 static std::chrono::steady_clock::time_point g_last_image_change;
-static constexpr int IMAGE_CHANGE_INTERVAL_SEC = 600;  // 10 minutes
+static constexpr int IMAGE_CHANGE_INTERVAL_SEC = 60;  // 1 minutes
 
 static void log_bounce_event(const char* edge, double x, double vx) {
     LOG("bounce: hit %s edge at x=%.0f (vx=%.1f -> %.1f)",
@@ -115,7 +115,7 @@ void bounce_load_random_image() {
 bool bounce_update() {
     if (!g_bounce_enabled || !g_img_surface) return false;
 
-    // Check if it's time to load a new random image (every 10 minutes)
+    // Check if it's time to load a new random image (every 1 minutes)
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_last_image_change).count();
     if (elapsed >= IMAGE_CHANGE_INTERVAL_SEC && !g_image_paths.empty()) {

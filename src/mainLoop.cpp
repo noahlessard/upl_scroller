@@ -104,13 +104,15 @@ int main() {
     LOG("querying mpv properties...");
     mpv_query_props();
 
-    // ── Test phase: display static image for 5 seconds ────────────────────────
-    LOG("TEST: displaying image at top-left corner");
+    // ── Test phase: display random image for 5 seconds ────────────────────────
+    LOG("TEST: displaying random image at top-left corner");
 
-    const char* jpg_path = "static/soggy.jpg";
-    cairo_surface_t* img = image_load_jpeg(jpg_path, 100, 100);
+    // Scan for images and load a random one using bounce infrastructure
+    bounce_scan_images("static");
+    bounce_load_random_image();  // This sets g_img_surface to a random image
+    cairo_surface_t* img = g_img_surface;
     if (!img) {
-        LOG("WARNING: Failed to load soggy.jpg, using green placeholder");
+        LOG("No images available, using green placeholder");
         img = image_create_placeholder(100, 100);
     }
 
@@ -131,6 +133,16 @@ int main() {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         cairo_surface_destroy(img);
     }
+
+    // Clear test phase resources before bounce_init
+    if (g_img_surface) {
+        cairo_surface_destroy(g_img_surface);
+        g_img_surface = nullptr;
+    }
+    for (const char* path : g_image_paths) {
+        free((void*)path);
+    }
+    g_image_paths.clear();
 
     // Drain mpv responses
     drain_mpv_replies();
