@@ -86,7 +86,7 @@ int main() {
     LOG("init_shm_cairo OK (%d bytes mapped)", g_shm_size);
 
     // Font
-    font_init(FONT_TTF);
+    font_init("pix.ttf");
     LOG("font_init OK");
 
     // Scroll
