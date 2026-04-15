@@ -21,9 +21,10 @@ static bool    g_bounce_enabled = false;
 static cairo_surface_t* g_img_surface = nullptr;
 
 // Random image support
-static std::vector<const char*> g_image_paths;
 static std::chrono::steady_clock::time_point g_last_image_change;
 static constexpr int IMAGE_CHANGE_INTERVAL_SEC = 60;  // 1 minutes
+
+static std::vector<const char*>& get_image_paths();
 
 static void log_bounce_event(const char* edge, double x, double vx) {
     LOG("bounce: hit %s edge at x=%.0f (vx=%.1f -> %.1f)",
@@ -37,17 +38,18 @@ void bounce_init(bool enabled) {
     g_bounce_vx = 2.0;
     g_bounce_vy = 2.0;
     g_img_surface = nullptr;
-    g_image_paths.clear();
+    get_image_paths().clear();
     g_last_image_change = std::chrono::steady_clock::now();
     // Scan for images on startup
     bounce_scan_images("static");
-    if (!g_image_paths.empty()) {
+    if (!get_image_paths().empty()) {
         bounce_load_random_image();
     }
 }
 
 void bounce_scan_images(const char* folder) {
-    g_image_paths.clear();
+    auto& paths = get_image_paths();
+    paths.clear();
     DIR* dir = opendir(folder);
     if (!dir) {
         LOG("failed to open folder %s: %s", folder, strerror(errno));
@@ -64,7 +66,7 @@ void bounce_scan_images(const char* folder) {
             // Create a copy of the filename for the path
             char full_path[512];
             snprintf(full_path, sizeof(full_path), "%s/%s", folder, name);
-            g_image_paths.push_back(strdup(full_path));
+            paths.push_back(strdup(full_path));
             LOG("found image: %s", full_path);
         }
     }
@@ -73,7 +75,7 @@ void bounce_scan_images(const char* folder) {
 }
 
 const std::vector<const char*>& bounce_get_images() {
-    return g_image_paths;
+    return get_image_paths();
 }
 
 cairo_surface_t* bounce_get_current_surface() {
@@ -81,18 +83,20 @@ cairo_surface_t* bounce_get_current_surface() {
 }
 
 size_t bounce_get_image_count() {
-    return g_image_paths.size();
+    return get_image_paths().size();
 }
 
 void bounce_clear_image_paths() {
-    for (const char* path : g_image_paths) {
+    auto& paths = get_image_paths();
+    for (const char* path : paths) {
         free((void*)path);
     }
-    g_image_paths.clear();
+    paths.clear();
 }
 
 void bounce_load_random_image() {
-    if (g_image_paths.empty()) {
+    auto& paths = get_image_paths();
+    if (paths.empty()) {
         LOG("no images found, using placeholder");
         g_img_surface = image_create_placeholder(100, 100);
         return;
@@ -101,11 +105,11 @@ void bounce_load_random_image() {
     // Pick random index
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> dist(0, g_image_paths.size() - 1);
+    std::uniform_int_distribution<size_t> dist(0, paths.size() - 1);
     size_t idx = dist(gen);
 
-    const char* path = g_image_paths[idx];
-    LOG("loading random image %s (index %zu of %zu)", path, idx, g_image_paths.size());
+    const char* path = paths[idx];
+    LOG("loading random image %s (index %zu of %zu)", path, idx, paths.size());
 
     // Destroy current surface
     if (g_img_surface) {
@@ -133,7 +137,7 @@ bool bounce_update() {
     // Check if it's time to load a new random image (every 1 minutes)
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_last_image_change).count();
-    if (elapsed >= IMAGE_CHANGE_INTERVAL_SEC && !g_image_paths.empty()) {
+    if (elapsed >= IMAGE_CHANGE_INTERVAL_SEC && !get_image_paths().empty()) {
         LOG("time to pick new random image (elapsed: %d seconds)", (int)elapsed);
         bounce_load_random_image();
     }
@@ -203,9 +207,15 @@ void bounce_shutdown() {
         g_img_surface = nullptr;
     }
     // Free image paths
-    for (const char* path : g_image_paths) {
+    auto& paths = get_image_paths();
+    for (const char* path : paths) {
         free((void*)path);
     }
-    g_image_paths.clear();
+    paths.clear();
     g_bounce_enabled = false;
+}
+
+static std::vector<const char*>& get_image_paths() {
+    static std::vector<const char*> paths;
+    return paths;
 }

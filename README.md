@@ -45,15 +45,12 @@ upl_scroller/
 │   ├── MpvIpc.cpp          # MPV IPC communication
 │   └── MpvIpc.h            # MPV IPC communication
 ├── startvlc.sh             # Shell script to start VLC media player
-├── fonts.sh                # Shell script to handle font setup
 └── bing.mp3                # Audio file used by the application
 ```
 
 ## Build System
 
-The project uses CMake as its build system. The `CMakeLists.txt` file defines the build configuration, including compiler settings, dependencies, and the target executable.
-
-## Setup on Raspberry Pi (Raspbian)
+### Setup on Raspberry Pi (Raspbian)
 
 ```bash
 sudo apt-get update
@@ -63,6 +60,32 @@ cmake -B build
 make -C build
 ./upl_scroller
 ```
+
+### Docker Cross-Compilation (ARM)
+
+Build an ARM binary inside a container:
+
+```bash
+docker-compose run --rm cross-compile
+```
+
+The resulting `upl_scroller` binary will be in the project root, ready to copy to your Raspberry Pi.
+
+### Clazy Static Analysis
+
+Run Clazy (Qt developer static analysis tool) to check for common issues:
+
+```bash
+docker-compose run --rm clazy
+```
+
+Output from Clazy will show warnings in the console. Common checks include:
+- Unused variables
+- Missing `Q_OBJECT` macro
+- Include order violations
+- Memory leaks and more
+
+To customize checks, modify the `CLAZY_CHECKS` environment variable in `docker-compose.yml`. Default: `check-for-unused-vars,check-for-variadic-macro-args,include-order`
 
 ## Logging
 

@@ -1,4 +1,5 @@
 build/
 build-arm/
+build-clazy/
 fonts/
 upl_scroller

@@ -1,4 +1,23 @@
 services:
+  clazy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: upl-scroller-clazy
+    volumes:
+      - .:/work
+    working_dir: /work
+    environment:
+      - CLAZY_CHECKS=non-pod-global-static
+    command: >
+      bash -c "
+        mkdir -p build-clazy && cd build-clazy &&
+        cmake .. -DCMAKE_CXX_COMPILER=clazy &&
+        make &&
+        echo '' &&
+        echo 'Clazy analysis complete!'
+      "
+
   cross-compile:
     build:
       context: .
