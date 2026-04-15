@@ -91,6 +91,9 @@ static void load_next_event() {
         // Position event (with spacing)
         g_event_x_pos = 0;
         
+        // Position the new event at the right edge of screen
+        g_scroll_x = (float)OVERLAY_W;
+        
         g_current_event_index++;
     }
 }
@@ -102,7 +105,7 @@ static void next_event() {
         return;
     }
     
-    g_current_event_index = 0;
+    // Move to the next event (don't reset to 0)
     load_next_event();
 }
 
@@ -171,8 +174,8 @@ void scroll_draw() {
     
     // Draw "more" indicator if there are more events
     if (g_current_event_index < get_events().size()) {
-        cairo_move_to(g_cr, g_scroll_x - 10, (float)g_text_baseline);
-        cairo_show_text(g_cr, "•••");
+        cairo_move_to(g_cr, g_scroll_x + g_text_width + 5, (float)g_text_baseline);
+        cairo_show_text(g_cr, " ... ");
     }
 }
 
