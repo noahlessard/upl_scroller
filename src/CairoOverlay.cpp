@@ -19,42 +19,6 @@ static void set_green() { cairo_set_source_rgba(g_cr, 0, 1, 0, 1); }
 static void set_black() { cairo_set_source_rgba(g_cr, 0, 0, 0, 1); }
 static void set_white() { cairo_set_source_rgba(g_cr, 1, 1, 1, 1); }
 
-// ── Border ────────────────────────────────────────────────────────────────────
-void cairo_draw_border(bool show_bottom_label) {
-    clear_to_transparent();
-    set_green();
-
-    // Top bar
-    cairo_rectangle(g_cr, 0, 0, OVERLAY_W, TOP_BAR_H);
-    cairo_fill(g_cr);
-
-    // Bottom bar
-    cairo_rectangle(g_cr, 0, OVERLAY_H - BOTTOM_BAR_H, OVERLAY_W, BOTTOM_BAR_H);
-    cairo_fill(g_cr);
-
-    // Left border strip
-    cairo_rectangle(g_cr, 0, TOP_BAR_H, SIDE_BORDER_W,
-                    OVERLAY_H - TOP_BAR_H - BOTTOM_BAR_H);
-    cairo_fill(g_cr);
-
-    // Right border strip
-    cairo_rectangle(g_cr, OVERLAY_W - SIDE_BORDER_W, TOP_BAR_H,
-                    SIDE_BORDER_W, OVERLAY_H - TOP_BAR_H - BOTTOM_BAR_H);
-    cairo_fill(g_cr);
-
-    // Top label
-    cairo_set_font_size(g_cr, LABEL_FONT_SZ);
-    set_black();
-    cairo_move_to(g_cr, 10, TOP_BAR_H - 8);
-    cairo_show_text(g_cr, " UPL TRAIN CAM ");
-
-    // Bottom label (when no ticker is active)
-    if (show_bottom_label) {
-        cairo_move_to(g_cr, 10, OVERLAY_H - 12);
-        cairo_show_text(g_cr, " 24 HRS A DAY ");
-    }
-}
-
 // ── Alert window ──────────────────────────────────────────────────────────────
 static std::vector<std::string> wrap_pixels(std::string_view text, double max_w) {
     std::vector<std::string> lines;
@@ -87,7 +51,7 @@ static std::vector<std::string> wrap_pixels(std::string_view text, double max_w)
 }
 
 void cairo_create_alert(std::string_view title, std::string_view body, float duration_s) {
-    cairo_draw_border(true);
+    clear_to_transparent();
 
     cairo_set_font_size(g_cr, ALERT_BODY_SZ);
     double max_content_w = 380.0;

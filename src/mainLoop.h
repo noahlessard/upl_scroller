@@ -10,12 +10,10 @@ constexpr int OVERLAY_X = 0;   // full width
 constexpr int OVERLAY_Y = 0;   // full height
 
 // ── Bar / border sizes ────────────────────────────────────────────────────────
-constexpr int TOP_BAR_H     = 17;
 constexpr int BOTTOM_BAR_H  = 23;
-constexpr int SIDE_BORDER_W = 3;
 
 // ── Font sizes ────────────────────────────────────────────────────────────────
-constexpr double LABEL_FONT_SZ      = 12.0;   // "UPL TRAIN CAM" / "24 HRS A DAY"
+constexpr double LABEL_FONT_SZ      = 12.0;
 constexpr double TICKER_FONT_SZ     = 18.0;   // scrolling ticker
 constexpr double ALERT_TITLE_SZ     = 14.0;
 constexpr double ALERT_BODY_SZ      = 10.0;
