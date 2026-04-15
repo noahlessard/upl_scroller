@@ -62,6 +62,7 @@ void bounce_scan_images(const char* folder) {
         // Check for .jpg or .jpeg extension (case-insensitive)
         size_t len = strlen(name);
         if (len > 4 && (strcmp(name + len - 4, ".jpg") == 0 ||
+                        strcmp(name + len - 4, ".JPG") == 0 ||
                         strcmp(name + len - 5, ".jpeg") == 0)) {
             // Create a copy of the filename for the path
             char full_path[512];
