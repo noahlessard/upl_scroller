@@ -41,6 +41,14 @@ std::string ClaudeStatusMonitor::get_status() const {
 }
 
 void ClaudeStatusMonitor::render() {
+    if (network_error_.load()) {
+        font_set_size(ALERT_BODY_SZ);
+        cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
+        cairo_move_to(g_cr, OVERLAY_X + OVERLAY_W - 40, OVERLAY_Y + 10);
+        cairo_show_text(g_cr, "OFFLINE");
+        return;
+    }
+
     // Show alert in test mode (first run) OR if status is actually down
     if (!test_mode_.load() && !is_down.load()) return;
 
@@ -150,6 +158,13 @@ void ClaudeStatusMonitor::fetch_status_html(std::string& response) {
 void ClaudeStatusMonitor::check_status() {
     std::string html;
     fetch_status_html(html);
+
+    if (html.empty()) {
+        LOG("Claude status: fetch failed, keeping previous status");
+        network_error_.store(true);
+        return;
+    }
+    network_error_.store(false);
 
     // Claude status page uses CSS classes: status-red, status-orange, status-green, status-none
     // status-none means all systems operational

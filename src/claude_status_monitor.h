@@ -20,6 +20,7 @@ public:
     std::atomic<bool> is_down{false};
     std::atomic<bool> running{false};
     std::atomic<bool> test_mode_{true};
+    std::atomic<bool> network_error_{false};
 
     void start();
     void stop();
