@@ -30,7 +30,8 @@ target_link_libraries(${PROJECT_NAME}
     ${CAIRO_LIBRARIES}
     ${FREETYPE_LIBRARIES}
     ${JPEG_LIBRARIES}
-    ${CURL_LIBRARIES})
+    ${CURL_LIBRARIES}
+    pthread)
 
 # Paths baked into the binary at compile time
 target_compile_definitions(${PROJECT_NAME} PRIVATE

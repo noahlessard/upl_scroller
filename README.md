@@ -56,7 +56,7 @@ upl_scroller/
 
 ```bash
 sudo apt-get update
-sudo apt-get install cmake g++ libnotcurses-dev jpeglib-dev libcurl4-openssl-dev
+sudo apt-get install cmake g++ libcairo2-dev libfreetype6-dev libjpeg-dev libcurl4-openssl-dev
 
 cmake -B build
 make -C build

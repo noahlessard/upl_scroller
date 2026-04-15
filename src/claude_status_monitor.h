@@ -2,6 +2,9 @@
 #include <atomic>
 #include <string>
 #include <thread>
+// Forward declaration — full cairo.h is included via mainLoop.h in translation units that need it
+struct _cairo_surface;
+typedef struct _cairo_surface cairo_surface_t;
 
 // Forward declaration
 class ClaudeStatusMonitor;
@@ -36,5 +39,5 @@ private:
     mutable cairo_surface_t* faucet_surf_;
 
 public:
-    ~ClaudeStatusMonitor() = default;
+    ~ClaudeStatusMonitor();
 };

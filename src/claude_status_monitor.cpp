@@ -1,3 +1,4 @@
+#include "claude_status_monitor.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -9,189 +10,173 @@
 #include "Logging.h"
 #include "mainLoop.h"
 
-class ClaudeStatusMonitor {
-public:
-    static constexpr int BOX_SIZE = 256;
-    static constexpr int POLL_INTERVAL_SEC = 30;
-
-    std::atomic<bool> is_down{false};
-    std::atomic<bool> running{false};
-    std::atomic<bool> test_mode_{true};  // Show alert once at startup for testing
-
-    void start() {
-        if (running.load()) return;
-        running.store(true);
-        monitoring_thread = std::thread([this]() {
-            while (running.load()) {
-                check_status();
-                std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SEC));
-            }
-        });
-    }
-
-    void stop() {
-        running.store(false);
-        if (monitoring_thread.joinable()) {
-            monitoring_thread.join();
+void ClaudeStatusMonitor::start() {
+    if (running.load()) return;
+    running.store(true);
+    monitoring_thread = std::thread([this]() {
+        while (running.load()) {
+            check_status();
+            std::this_thread::sleep_for(std::chrono::seconds(POLL_INTERVAL_SEC));
         }
+    });
+}
+
+void ClaudeStatusMonitor::stop() {
+    running.store(false);
+    if (monitoring_thread.joinable()) {
+        monitoring_thread.join();
     }
+}
 
-    // After initial test, disable test mode so alert only shows when actually down
-    void end_test_mode() {
-        test_mode_.store(false);
+void ClaudeStatusMonitor::end_test_mode() {
+    test_mode_.store(false);
+}
+
+bool ClaudeStatusMonitor::get_is_down() const {
+    return is_down.load();
+}
+
+std::string ClaudeStatusMonitor::get_status() const {
+    return last_status_;
+}
+
+void ClaudeStatusMonitor::render() {
+    // Show alert in test mode (first run) OR if status is actually down
+    if (!test_mode_.load() && !is_down.load()) return;
+
+    // Draw red background box (top-right corner)
+    cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
+    cairo_rectangle(g_cr, OVERLAY_X + OVERLAY_W - BOX_SIZE, OVERLAY_Y, BOX_SIZE, BOX_SIZE);
+    cairo_fill(g_cr);
+
+    // Draw "Claude is down" text at top center
+    font_set_size(ALERT_TITLE_SZ);
+    cairo_set_source_rgba(g_cr, 1.0, 1.0, 1.0, 1.0);
+    const std::string message = "Claude is down";
+    cairo_text_extents_t te;
+    cairo_text_extents(g_cr, message.c_str(), &te);
+    double text_width = te.x_advance;
+    cairo_move_to(g_cr, (OVERLAY_X + OVERLAY_W - BOX_SIZE + (BOX_SIZE - text_width) / 2.0),
+                         OVERLAY_Y + 35);
+    cairo_show_text(g_cr, message.c_str());
+    cairo_fill(g_cr);
+
+    // Load and render faucet.jpg at bottom of box
+    render_image(OVERLAY_X + OVERLAY_W - BOX_SIZE + 10, OVERLAY_Y + BOX_SIZE - 160, 136, 128);
+}
+
+ClaudeStatusMonitor::~ClaudeStatusMonitor() {
+    stop();
+    if (faucet_surf_) {
+        cairo_surface_destroy(faucet_surf_);
     }
+}
 
-    bool get_is_down() const {
-        return is_down.load();
+static size_t write_callback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+    size_t total_size = size * nmemb;
+    userp->append((char*)contents, total_size);
+    return total_size;
+}
+
+void ClaudeStatusMonitor::load_faucet_image() {
+    if (faucet_surf_) {
+        cairo_surface_destroy(faucet_surf_);
     }
-
-    std::string get_status() const {
-        return last_status_;
-    }
-
-    void render() {
-        // Show alert in test mode (first run) OR if status is actually down
-        if (!test_mode_.load() && !is_down.load()) return;
-
-        // Draw red background box (top-right corner)
-        cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
-        cairo_rectangle(g_cr, OVERLAY_X + OVERLAY_W - BOX_SIZE, OVERLAY_Y, BOX_SIZE, BOX_SIZE);
-        cairo_fill(g_cr);
-
-        // Draw "Claude is down" text at top center
-        font_set_size(ALERT_TITLE_SZ);
-        cairo_set_source_rgba(g_cr, 1.0, 1.0, 1.0, 1.0);
-        const std::string message = "Claude is down";
-        cairo_text_extents_t te;
-        cairo_text_extents(g_cr, message.c_str(), &te);
-        double text_width = te.x_advance;
-        cairo_move_to(g_cr, (OVERLAY_X + OVERLAY_W - BOX_SIZE + (BOX_SIZE - text_width) / 2.0),
-                             OVERLAY_Y + 35);
-        cairo_show_text(g_cr, message.c_str());
-        cairo_fill(g_cr);
-
-        // Load and render faucet.jpg at bottom of box
-        render_image(OVERLAY_X + OVERLAY_W - BOX_SIZE + 10, OVERLAY_Y + BOX_SIZE - 160, 136, 128);
-    }
-
-private:
-    std::thread monitoring_thread;
-    std::string last_status_ = "unknown";
-    cairo_surface_t* faucet_surf_ = nullptr;
-
-    ~ClaudeStatusMonitor() {
-        stop();
+    faucet_surf_ = nullptr;
+    std::string paths[] = {
+        "static/faucet.jpg",
+        "faucet.jpg",
+        "./faucet.jpg",
+        "../faucet.jpg"
+    };
+    for (const auto& p : paths) {
+        faucet_surf_ = image_load_jpeg(p.c_str(), 256, 128);
         if (faucet_surf_) {
-            cairo_surface_destroy(faucet_surf_);
+            LOG("Loaded faucet.jpg from %s", p.c_str());
+            break;
         }
     }
+    if (!faucet_surf_) {
+        LOG("Warning: faucet.jpg not found");
+    }
+}
 
-    static size_t write_callback(void* contents, size_t size, size_t nmemb, std::string* userp) {
-        size_t total_size = size * nmemb;
-        userp->append((char*)contents, total_size);
-        return total_size;
+void ClaudeStatusMonitor::render_image(int x, int y, int w, int h) {
+    if (!faucet_surf_) {
+        load_faucet_image();
+        if (!faucet_surf_) return;
     }
 
-    void load_faucet_image() {
-        if (faucet_surf_) {
-            cairo_surface_destroy(faucet_surf_);
-        }
-        faucet_surf_ = nullptr;
-        std::string paths[] = {
-            "static/faucet.jpg",
-            "faucet.jpg",
-            "./faucet.jpg",
-            "../faucet.jpg"
-        };
-        for (const auto& p : paths) {
-            faucet_surf_ = image_load_jpeg(p.c_str(), 256, 128);
-            if (faucet_surf_) {
-                LOG("Loaded faucet.jpg from %s", p.c_str());
-                break;
-            }
-        }
-        if (!faucet_surf_) {
-            LOG("Warning: faucet.jpg not found");
-        }
+    cairo_surface_t* scaled = cairo_surface_create_similar_image(
+        g_surface, CAIRO_FORMAT_ARGB32, w, h);
+    cairo_t* cr = cairo_create(scaled);
+
+    cairo_set_source_surface(cr, faucet_surf_, 0, 0);
+    cairo_scale(cr, (double)w / cairo_image_surface_get_width(faucet_surf_),
+                      (double)h / cairo_image_surface_get_height(faucet_surf_));
+    cairo_paint(cr);
+
+    cairo_destroy(cr);
+
+    // Draw scaled image at position
+    cairo_set_source_surface(g_cr, scaled, x, y);
+    cairo_paint(g_cr);
+
+    cairo_surface_destroy(scaled);
+}
+
+void ClaudeStatusMonitor::fetch_status_html(std::string& response) {
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        LOG("Failed to init curl");
+        response = "";
+        return;
     }
 
-    void render_image(int x, int y, int w, int h) {
-        if (!faucet_surf_) {
-            load_faucet_image();
-            if (!faucet_surf_) return;
-        }
+    curl_easy_setopt(curl, CURLOPT_URL, "https://status.claude.com/");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-        cairo_surface_t* scaled = cairo_surface_create_similar_image(
-            g_surface, CAIRO_FORMAT_ARGB32, w, h);
-        cairo_t* cr = cairo_create(scaled);
-
-        cairo_set_source_surface(cr, faucet_surf_, 0, 0);
-        cairo_scale(cr, (double)w / cairo_image_surface_get_width(faucet_surf_),
-                          (double)h / cairo_image_surface_get_height(faucet_surf_));
-        cairo_paint(cr);
-
-        cairo_destroy(cr);
-
-        // Draw scaled image at position
-        cairo_set_source_surface(g_cr, scaled, x, y);
-        cairo_paint(g_cr);
-
-        cairo_surface_destroy(scaled);
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        LOG("curl_easy_perform failed: %s", curl_easy_strerror(res));
+        response = "";
     }
 
-    void fetch_status_html(std::string& response) {
-        CURL* curl = curl_easy_init();
-        if (!curl) {
-            LOG("Failed to init curl");
-            response = "";
-            return;
-        }
+    curl_easy_cleanup(curl);
+}
 
-        curl_easy_setopt(curl, CURLOPT_URL, "https://status.claude.com/");
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+void ClaudeStatusMonitor::check_status() {
+    std::string html;
+    fetch_status_html(html);
 
-        CURLcode res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            LOG("curl_easy_perform failed: %s", curl_easy_strerror(res));
-            response = "";
-        }
+    // Claude status page uses CSS classes: status-red, status-orange, status-green, status-none
+    // status-none means all systems operational
+    // status-green means component is OK
 
-        curl_easy_cleanup(curl);
-    }
+    bool page_ok = html.find("page-status status-none") != std::string::npos ||
+                   html.find("page-status status-green") != std::string::npos;
 
-    void check_status() {
-        std::string html;
-        fetch_status_html(html);
+    // Check if there are any problematic statuses in components
+    bool has_issues = html.find("status-red") != std::string::npos ||
+                      html.find("status-orange") != std::string::npos;
 
-        // Claude status page uses CSS classes: status-red, status-orange, status-green, status-none
-        // status-none means all systems operational
-        // status-green means component is OK
-        
-        bool page_ok = html.find("page-status status-none") != std::string::npos ||
-                       html.find("page-status status-green") != std::string::npos;
-        
-        // Check if there are any problematic statuses in components
-        bool has_issues = html.find("status-red") != std::string::npos ||
-                          html.find("status-orange") != std::string::npos;
-
-        if (!page_ok || has_issues) {
-            if (html.find("page-status status-red") != std::string::npos ||
-                html.find("page-status status-critical") != std::string::npos) {
-                last_status_ = "critical";
-            } else if (html.find("page-status status-orange") != std::string::npos ||
-                       html.find("status-red") != std::string::npos) {
-                last_status_ = "major";
-            } else {
-                last_status_ = "minor";
-            }
-            is_down.store(true);
-            LOG("Claude status: %s - DOWN", last_status_.c_str());
+    if (!page_ok || has_issues) {
+        if (html.find("page-status status-red") != std::string::npos ||
+            html.find("page-status status-critical") != std::string::npos) {
+            last_status_ = "critical";
+        } else if (html.find("page-status status-orange") != std::string::npos ||
+                   html.find("status-red") != std::string::npos) {
+            last_status_ = "major";
         } else {
-            last_status_ = "OK";
-            is_down.store(false);
-            LOG("Claude status: OK");
+            last_status_ = "minor";
         }
+        is_down.store(true);
+        LOG("Claude status: %s - DOWN", last_status_.c_str());
+    } else {
+        last_status_ = "OK";
+        is_down.store(false);
+        LOG("Claude status: OK");
     }
-};
+}
