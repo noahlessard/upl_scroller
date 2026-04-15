@@ -1,0 +1,18 @@
+services:
+  cross-compile:
+    build:
+      context: .
+      dockerfile: Dockerfile.cross
+    container_name: upl-scroller-cross-compile
+    volumes:
+      - .:/work
+    working_dir: /work
+    command: >
+      bash -c "
+        mkdir -p build-arm && cd build-arm &&
+        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake &&
+        make &&
+        echo '' &&
+        echo 'Build complete! ARM binary: ./upl_scroller' &&
+        echo 'Copy to Pi: scp upl_scroller pi@YOUR_PI_IP:/home/pi/'
+      "
