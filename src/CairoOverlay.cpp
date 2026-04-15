@@ -69,9 +69,11 @@ static std::vector<std::string> wrap_pixels(std::string_view text, double max_w)
     size_t pos = 0;
     while (pos < text.size()) {
         size_t sp = text.find(' ', pos);
-        if (sp == std::string_view::npos) sp = text.size();
+        if (sp == std::string_view::npos) { sp = text.size(); }
         std::string word(text.substr(pos, sp - pos));
-        std::string trial = current.empty() ? word : current + " " + word;
+        std::string trial = current;
+        if (!current.empty()) { trial += ' '; }
+        trial += word;
         if (!current.empty() && measure(trial) > max_w) {
             lines.push_back(current);
             current = word;
@@ -80,7 +82,7 @@ static std::vector<std::string> wrap_pixels(std::string_view text, double max_w)
         }
         pos = sp + 1;
     }
-    if (!current.empty()) lines.push_back(current);
+    if (!current.empty()) { lines.push_back(current); }
     return lines;
 }
 

@@ -1,21 +1,19 @@
 services:
-  clazy:
+  static-analysis:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: upl-scroller-clazy
+    container_name: upl-scroller-static-analysis
     volumes:
       - .:/work
     working_dir: /work
-    environment:
-      - CLAZY_CHECKS=non-pod-global-static
     command: >
       bash -c "
-        mkdir -p build-clazy && cd build-clazy &&
-        cmake .. -DCMAKE_CXX_COMPILER=clazy &&
-        make &&
-        echo '' &&
-        echo 'Clazy analysis complete!'
+        mkdir -p build-analysis && cd build-analysis &&
+        cmake .. -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > /dev/null 2>&1 &&
+        echo '=== CLANG-TIDY RESULTS START ===' &&
+        clang-tidy -p /work/build-analysis -checks='bugprone-*,modernize-*,performance-*,readability-*,cppcoreguidelines-*,clang-analyzer-*' --header-filter='.*' /work/src/*.cpp 2>&1 &&
+        echo '=== CLANG-TIDY RESULTS END ==='
       "
 
   cross-compile:
@@ -29,9 +27,16 @@ services:
     command: >
       bash -c "
         mkdir -p build-arm && cd build-arm &&
-        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake &&
-        make &&
-        echo '' &&
-        echo 'Build complete! ARM binary: ./upl_scroller' &&
-        echo 'Copy to Pi: scp upl_scroller pi@YOUR_PI_IP:/home/pi/'
+        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake > /dev/null 2>&1 &&
+        echo '=== BUILD OUTPUT START ===' &&
+        make > /dev/null ;
+        BUILD_EXIT=$$? &&
+        echo '=== BUILD OUTPUT END ===' &&
+        if [ $$BUILD_EXIT -eq 0 ]; then
+          echo 'Build succeeded. ARM binary: build-arm/upl_scroller' &&
+          echo 'Copy to Pi: scp build-arm/upl_scroller pi@YOUR_PI_IP:/home/pi/' ;
+        else
+          echo 'Build FAILED (exit code '$$BUILD_EXIT')' &&
+          exit $$BUILD_EXIT ;
+        fi
       "

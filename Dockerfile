@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies, Clazy, and Qt5 for static analysis
+# Install build dependencies and clang-tidy for static analysis
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -12,10 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6-dev \
     libjpeg-dev \
     clang \
-    libclang-dev \
-    clazy \
-    qt5-qmake \
-    qtbase5-dev \
+    clang-tidy \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work

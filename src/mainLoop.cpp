@@ -5,6 +5,7 @@
 #include "Bounce.h"
 #include "FontLoader.h"
 #include "scroll.h"
+#include "ScrollEvent.h"
 
 #include <cairo/cairo.h>
 #include <sys/mman.h>
@@ -63,9 +64,7 @@ static bool init_shm_cairo() {
     cairo_status_t cs = cairo_status(g_cr);
     LOG("cairo surface status: %s", cairo_status_to_string(ss));
     LOG("cairo context status: %s", cairo_status_to_string(cs));
-    if (ss != CAIRO_STATUS_SUCCESS || cs != CAIRO_STATUS_SUCCESS) return false;
-
-    return true;
+    return ss == CAIRO_STATUS_SUCCESS && cs == CAIRO_STATUS_SUCCESS;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -111,9 +110,9 @@ int main() {
     LOG("TEST: displaying random image at top-left corner");
     cairo_surface_t* img = bounce_get_current_surface();
     if (img) {
-        int w = (int)cairo_image_surface_get_width(img);
-        int h = (int)cairo_image_surface_get_height(img);
-        LOG("drawing image %dx%d at (0,0)", w, h);
+        LOG("drawing image %dx%d at (0,0)",
+            (int)cairo_image_surface_get_width(img),
+            (int)cairo_image_surface_get_height(img));
 
         cairo_save(g_cr);
         cairo_set_source_surface(g_cr, img, 0, 0);

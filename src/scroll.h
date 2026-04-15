@@ -1,4 +1,5 @@
 #pragma once
+#include "ScrollEvent.h"
 
 // Initialize scrolling subsystem (call once at startup)
 void scroll_init();
@@ -12,3 +13,6 @@ void scroll_draw();
 
 // Shutdown scrolling subsystem (cleanup at program exit)
 void scroll_shutdown();
+
+// Refresh scroll events to new random set
+void scroll_refresh_events();

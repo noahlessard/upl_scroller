@@ -56,7 +56,7 @@ void bounce_scan_images(const char* folder) {
         return;
     }
 
-    struct dirent* entry;
+    struct dirent* entry = nullptr;
     while ((entry = readdir(dir)) != nullptr) {
         const char* name = entry->d_name;
         // Check for .jpg or .jpeg extension (case-insensitive)
@@ -132,7 +132,7 @@ void bounce_load_random_image() {
 }
 
 bool bounce_update() {
-    if (!g_bounce_enabled || !g_img_surface) return false;
+    if (!g_bounce_enabled || !g_img_surface) { return false; }
 
     // Check if it's time to load a new random image (every 1 minutes)
     auto now = std::chrono::steady_clock::now();
@@ -186,13 +186,16 @@ void bounce_get_position(int* x, int* y, int* w, int* h) {
 }
 
 void bounce_draw() {
-    if (!g_bounce_enabled) return;
+    if (!g_bounce_enabled) { return; }
     if (!g_img_surface) {
         LOG("no bouncing image");
         return;
     }
 
-    int x, y, w, h;
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
     bounce_get_position(&x, &y, &w, &h);
     LOG("bouncing at (%d,%d) size %dx%d", x, y, w, h);
 

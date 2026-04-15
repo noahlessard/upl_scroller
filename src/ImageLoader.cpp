@@ -1,7 +1,7 @@
 #include "ImageLoader.h"
 #include "Logging.h"
 #include <cairo/cairo.h>
-#include <stddef.h>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <jpeglib.h>
@@ -14,8 +14,8 @@ cairo_surface_t* image_load_jpeg(const char* path, int max_w, int max_h) {
         return nullptr;
     }
 
-    struct jpeg_decompress_struct cinfo;
-    struct jpeg_error_mgr jerr;
+    struct jpeg_decompress_struct cinfo = {};
+    struct jpeg_error_mgr jerr = {};
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_decompress(&cinfo);
 
@@ -31,8 +31,7 @@ cairo_surface_t* image_load_jpeg(const char* path, int max_w, int max_h) {
     int height = max_h;
     if (src_w > max_w || src_h > max_h) {
         float scale = (float)max_w / src_w;
-        if (scale * src_h > max_h)
-            scale = (float)max_h / src_h;
+        if (scale * src_h > max_h) { scale = (float)max_h / src_h; }
         width  = (int)(src_w  * scale);
         height = (int)(src_h * scale);
     }

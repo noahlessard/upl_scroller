@@ -66,26 +66,37 @@ make -C build
 Build an ARM binary inside a container:
 
 ```bash
-docker-compose run --rm cross-compile
+docker-compose run --rm cross-compile 2>&1
 ```
 
-The resulting `upl_scroller` binary will be in the project root, ready to copy to your Raspberry Pi.
+Build progress is suppressed. Output is bounded by markers:
 
-### Clazy Static Analysis
+```
+=== BUILD OUTPUT START ===
+=== BUILD OUTPUT END ===
+Build succeeded. ARM binary: build-arm/upl_scroller
+```
 
-Run Clazy (Qt developer static analysis tool) to check for common issues:
+If the build fails, the exit code is non-zero and the failure is noted between the markers. Compiler warnings/errors appear on stderr and are visible between the markers via the `2>&1` redirect above.
+
+### Static Analysis (clang-tidy)
+
+Run clang-tidy with comprehensive checks across bugprone, modernize, performance, readability, cppcoreguidelines, and clang-analyzer categories:
 
 ```bash
-docker-compose run --rm clazy
+docker-compose build static-analysis
+docker-compose run --rm static-analysis 2>&1
 ```
 
-Output from Clazy will show warnings in the console. Common checks include:
-- Unused variables
-- Missing `Q_OBJECT` macro
-- Include order violations
-- Memory leaks and more
+Build the image first (once) to avoid mixing docker build output with analysis results. Output is bounded by markers — everything between them is the analysis:
 
-To customize checks, modify the `CLAZY_CHECKS` environment variable in `docker-compose.yml`. Default: `check-for-unused-vars,check-for-variadic-macro-args,include-order`
+```
+=== CLANG-TIDY RESULTS START ===
+/work/src/foo.cpp:42:5: warning: ... [bugprone-some-check]
+=== CLANG-TIDY RESULTS END ===
+```
+
+No output between the markers means no issues found. To adjust which check categories run, edit the `-checks=` flag in `docker-compose.yml`. The `*` wildcard enables all checks in a category; prefix a category with `-` to disable it (e.g., `-modernize-use-trailing-return-type`).
 
 ## Logging
 

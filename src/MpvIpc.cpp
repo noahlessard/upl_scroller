@@ -7,7 +7,7 @@
 #include <sys/un.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
+#include <cerrno>
 #include <cstring>
 #include <cstdio>
 #include <chrono>
@@ -34,7 +34,7 @@ bool mpv_connect() {
         if (connect(sock, (sockaddr*)&addr, sizeof(addr)) == 0) {
             // Make non-blocking so drain_mpv_replies() can poll without stalling
             int fl = fcntl(sock, F_GETFL, 0);
-            if (fl >= 0) fcntl(sock, F_SETFL, fl | O_NONBLOCK);
+            if (fl >= 0) { fcntl(sock, F_SETFL, fl | O_NONBLOCK); }
             LOG("connected to mpv at %s after %d attempts", MPV_SOCK, attempt + 1);
             g_mpv_sock = sock;
             return true;
@@ -74,7 +74,7 @@ void mpv_present_overlay() {
 }
 
 void mpv_query_props() {
-    if (g_mpv_sock < 0) return;
+    if (g_mpv_sock < 0) { return; }
     const char* cmds[] = {
         "{\"command\":[\"get_property\",\"mpv-version\"],\"request_id\":100}\n",
         "{\"command\":[\"get_property\",\"width\"],\"request_id\":101}\n",
@@ -84,7 +84,7 @@ void mpv_query_props() {
         "{\"command\":[\"get_property\",\"osd-width\"],\"request_id\":105}\n",
         "{\"command\":[\"get_property\",\"osd-height\"],\"request_id\":106}\n",
     };
-    for (auto c : cmds) write(g_mpv_sock, c, strlen(c));
+    for (const auto* c : cmds) { write(g_mpv_sock, c, strlen(c)); }
     usleep(400000);   // 400 ms - give mpv time to reply
     drain_mpv_replies();
 }
@@ -94,7 +94,7 @@ int mpv_get_socket() {
 }
 
 void drain_mpv_replies() {
-    if (g_mpv_sock < 0) return;
+    if (g_mpv_sock < 0) { return; }
     char buf[1024];
     for (;;) {
         ssize_t n = read(g_mpv_sock, buf, sizeof(buf) - 1);
@@ -110,7 +110,7 @@ void drain_mpv_replies() {
             g_mpv_sock = -1;
             return;
         } else {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) { return; }
             LOG("read(mpv) error: %s", strerror(errno));
             return;
         }
