@@ -2,7 +2,6 @@
 #include "Logging.h"
 #include "MpvIpc.h"
 #include "CairoOverlay.h"
-#include "ImageLoader.h"
 #include "Bounce.h"
 #include "FontLoader.h"
 #include "scroll.h"
@@ -104,18 +103,13 @@ int main() {
     LOG("querying mpv properties...");
     mpv_query_props();
 
-    // ── Test phase: display random image for 5 seconds ────────────────────────
+    // ── Start bouncing animation (scans /static and loads random image) ─────────
+    LOG("starting bouncing animation");
+    bounce_init(true);
+
+    // ── Test phase: display initial image for 5 seconds ───────────────────────
     LOG("TEST: displaying random image at top-left corner");
-
-    // Scan for images and load a random one using bounce infrastructure
-    bounce_scan_images("static");
-    bounce_load_random_image();  // This sets g_img_surface to a random image
     cairo_surface_t* img = bounce_get_current_surface();
-    if (!img) {
-        LOG("No images available, using green placeholder");
-        img = image_create_placeholder(100, 100);
-    }
-
     if (img) {
         int w = (int)cairo_image_surface_get_width(img);
         int h = (int)cairo_image_surface_get_height(img);
@@ -131,16 +125,7 @@ int main() {
 
         LOG("holding for 5 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        cairo_surface_destroy(img);
     }
-
-    // Destroy the test image - bounce_init will load a new one
-    if (img) {
-        cairo_surface_destroy(img);
-        img = nullptr;
-    }
-    // Clear image paths - bounce_init will scan and load fresh
-    bounce_clear_image_paths();
 
     // Drain mpv responses
     drain_mpv_replies();
@@ -148,10 +133,6 @@ int main() {
     // ── Second query ───────────────────────────────────────────────────────────
     LOG("re-querying mpv properties (VO should be running)...");
     mpv_query_props();
-
-    // ── Start bouncing animation loop ─────────────────────────────────────────
-    LOG("starting bouncing animation loop");
-    bounce_init(true);  // Scans /static and loads random image automatically
 
     // Main loop: keep refreshing so mpv doesn't drop overlay
     // Frame rate: 100ms (~10fps) with bouncing animation and scrolling text
