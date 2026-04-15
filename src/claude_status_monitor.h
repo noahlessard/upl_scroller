@@ -16,16 +16,18 @@ public:
 
     std::atomic<bool> is_down{false};
     std::atomic<bool> running{false};
+    std::atomic<bool> test_mode_{true};
 
     void start();
     void stop();
     bool get_is_down() const;
     std::string get_status() const;
     void render();
+    void end_test_mode();
 
 private:
     void load_faucet_image();
-    void render_image(int x, int y, int w, int h) const;
+    void render_image(int x, int y, int w, int h);
     void fetch_status_html(std::string& response);
     void check_status();
 

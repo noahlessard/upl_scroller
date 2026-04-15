@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2-dev:armhf \
     libfreetype6-dev:armhf \
     libjpeg-dev:armhf \
+    libcurl4-openssl-dev:armhf \
     clang \
     libclang-dev \
     clazy \

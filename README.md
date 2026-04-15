@@ -56,7 +56,7 @@ upl_scroller/
 
 ```bash
 sudo apt-get update
-sudo apt-get install cmake g++ libnotcurses-dev jpeglib-dev
+sudo apt-get install cmake g++ libnotcurses-dev jpeglib-dev libcurl4-openssl-dev
 
 cmake -B build
 make -C build
@@ -68,18 +68,19 @@ make -C build
 Build an ARM binary inside a container:
 
 ```bash
-docker-compose run --rm --remove-orphans cross-compile 2>&1
+docker-compose run --build --rm --remove-orphans cross-compile 2>&1
 ```
 
-Build progress is suppressed. Output is bounded by markers:
+Build progress (stdout) is suppressed. Compiler warnings and errors (stderr) are captured and printed between markers:
 
 ```
 === BUILD OUTPUT START ===
+/work/src/foo.cpp:42:10: error: 'libcurl' not found
 === BUILD OUTPUT END ===
-Build succeeded. ARM binary: build-arm/upl_scroller
+Build FAILED (exit code 1)
 ```
 
-If the build fails, the exit code is non-zero and the failure is noted between the markers. Compiler warnings/errors appear on stderr and are visible between the markers via the `2>&1` redirect above.
+If the build succeeds and there are no warnings, the section between the markers will be empty. The exit code is non-zero on failure.
 
 ### Static Analysis (clang-tidy)
 

@@ -27,16 +27,16 @@ services:
     command: >
       bash -c "
         mkdir -p build-arm && cd build-arm &&
-        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake > /dev/null 2>&1 &&
-        echo '=== BUILD OUTPUT START ===' &&
-        make > /dev/null ;
-        BUILD_EXIT=$$? &&
-        echo '=== BUILD OUTPUT END ===' &&
+        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake >/dev/null 2>/tmp/build_out.txt &&
+        make >/dev/null 2>>/tmp/build_out.txt ;
+        BUILD_EXIT=$$? ;
+        echo '=== BUILD OUTPUT START ===' ;
+        cat /tmp/build_out.txt ;
+        echo '=== BUILD OUTPUT END ===' ;
         if [ $$BUILD_EXIT -eq 0 ]; then
-          echo 'Build succeeded. ARM binary: build-arm/upl_scroller' &&
-          echo 'Copy to Pi: scp build-arm/upl_scroller pi@YOUR_PI_IP:/home/pi/' ;
+          echo 'Build succeeded. ARM binary: build-arm/upl_scroller' ;
         else
-          echo 'Build FAILED (exit code '$$BUILD_EXIT')' &&
+          echo 'Build FAILED (exit code '$$BUILD_EXIT')' ;
           exit $$BUILD_EXIT ;
         fi
       "
