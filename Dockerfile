@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2-dev \
     libfreetype6-dev \
     libjpeg-dev \
+    libcurl4-openssl-dev \
     clang \
     clang-tidy \
     && rm -rf /var/lib/apt/lists/*

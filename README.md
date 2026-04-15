@@ -39,13 +39,15 @@ upl_scroller/
 │   ├── FontLoader.cpp      # Font loading and initialization
 │   ├── FontLoader.h        # Font loading and initialization
 │   ├── ImageLoader.cpp     # JPEG image loading
-│   ├── ImageLoader.h       # JPEG image loading
-│   ├── Logging.cpp         # Logging subsystem
-│   ├── Logging.h           # Logging subsystem
-│   ├── MpvIpc.cpp          # MPV IPC communication
-│   └── MpvIpc.h            # MPV IPC communication
-├── startvlc.sh             # Shell script to start VLC media player
-└── bing.mp3                # Audio file used by the application
+│   ├── ImageLoader.h                # JPEG image loading
+│   ├── Logging.cpp                  # Logging subsystem
+│   ├── Logging.h                    # Logging subsystem
+│   ├── MpvIpc.cpp                   # MPV IPC communication
+│   ├── MpvIpc.h                     # MPV IPC communication
+|   ├── claude_status_monitor.cpp    # Polls claude's status page
+|   └── claude_status_monitor.h      # Polls claude's status page
+├── startvlc.sh                      # Shell script to start VLC media player
+└── bing.mp3                         # Audio file used by the application
 ```
 
 ## Build System
@@ -66,7 +68,7 @@ make -C build
 Build an ARM binary inside a container:
 
 ```bash
-docker-compose run --rm cross-compile 2>&1
+docker-compose run --rm --remove-orphans cross-compile 2>&1
 ```
 
 Build progress is suppressed. Output is bounded by markers:

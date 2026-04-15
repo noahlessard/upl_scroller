@@ -11,9 +11,16 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(CAIRO    REQUIRED cairo)
 pkg_check_modules(FREETYPE REQUIRED freetype2)
 pkg_check_modules(JPEG    REQUIRED libjpeg)
+pkg_check_modules(CURL    REQUIRED libcurl)
 
 file(GLOB SOURCES "src/*.cpp" "src/*.h")
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+# Copy faucet.jpg to output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/static/faucet.jpg
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CAIRO_INCLUDE_DIRS}
@@ -22,7 +29,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME}
     ${CAIRO_LIBRARIES}
     ${FREETYPE_LIBRARIES}
-    ${JPEG_LIBRARIES})
+    ${JPEG_LIBRARIES}
+    ${CURL_LIBRARIES})
 
 # Paths baked into the binary at compile time
 target_compile_definitions(${PROJECT_NAME} PRIVATE

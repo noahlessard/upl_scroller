@@ -41,7 +41,7 @@ void bounce_init(bool enabled) {
     get_image_paths().clear();
     g_last_image_change = std::chrono::steady_clock::now();
     // Scan for images on startup
-    bounce_scan_images("static");
+    bounce_scan_images("static/bounce");
     if (!get_image_paths().empty()) {
         bounce_load_random_image();
     }
@@ -99,7 +99,7 @@ void bounce_load_random_image() {
     auto& paths = get_image_paths();
     if (paths.empty()) {
         LOG("no images found, using placeholder");
-        g_img_surface = image_create_placeholder(100, 100);
+        g_img_surface = image_create_placeholder(200, 200);
         return;
     }
 
@@ -119,7 +119,7 @@ void bounce_load_random_image() {
     }
 
     // Load new image
-    g_img_surface = image_load_jpeg(path, 100, 100);
+    g_img_surface = image_load_jpeg(path, 200, 200);
     if (g_img_surface) {
         LOG("loaded bouncing image %dx%d",
             (int)cairo_image_surface_get_width(g_img_surface),

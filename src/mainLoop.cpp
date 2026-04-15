@@ -6,6 +6,7 @@
 #include "FontLoader.h"
 #include "scroll.h"
 #include "ScrollEvent.h"
+#include "claude_status_monitor.h"
 
 #include <cairo/cairo.h>
 #include <sys/mman.h>
@@ -24,6 +25,8 @@ cairo_t*         g_cr       = nullptr;
 int              g_mpv_sock = -1;
 static uint8_t*  g_shm_data = nullptr;
 static int       g_shm_size = 0;
+
+ClaudeStatusMonitor g_claude_monitor;
 
 static constexpr const char* SHM_PATH = "/dev/shm/overlay.bgra";
 
@@ -106,25 +109,21 @@ int main() {
     LOG("starting bouncing animation");
     bounce_init(true);
 
-    // ── Test phase: display initial image for 5 seconds ───────────────────────
-    LOG("TEST: displaying random image at top-left corner");
-    cairo_surface_t* img = bounce_get_current_surface();
-    if (img) {
-        LOG("drawing image %dx%d at (0,0)",
-            (int)cairo_image_surface_get_width(img),
-            (int)cairo_image_surface_get_height(img));
+    // Start Claude status monitoring
+    LOG("starting Claude status monitor (polling every %d seconds)",
+         ClaudeStatusMonitor::POLL_INTERVAL_SEC);
+    g_claude_monitor.start();
 
-        cairo_save(g_cr);
-        cairo_set_source_surface(g_cr, img, 0, 0);
-        cairo_paint(g_cr);
-        cairo_restore(g_cr);
-
-        cairo_surface_flush(g_surface);
-        mpv_present_overlay();
-
-        LOG("holding for 5 seconds...");
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
+    // ── Test phase: display initial status alert for 5 seconds ──────────────
+    // Render the status alert once to verify it works, then disable test mode
+    LOG("TEST: displaying Claude status alert (test mode)");
+    g_claude_monitor.render();
+    cairo_surface_flush(g_surface);
+    mpv_present_overlay();
+    LOG("holding for 5 seconds...");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    g_claude_monitor.end_test_mode();  // Now only show if status is actually down
+    LOG("test mode ended - alert will only show when Claude is down");
 
     // Drain mpv responses
     drain_mpv_replies();
@@ -146,11 +145,15 @@ int main() {
         // Draw scrolling text (behind image, at bottom)
         scroll_draw();
 
+        // Draw Claude status overlay (top-right, red box if down)
+        g_claude_monitor.render();
+
         mpv_present_overlay();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // ── Cleanup (unreachable in normal operation) ──────────────────────────────
+    g_claude_monitor.stop();
     scroll_shutdown();
     bounce_shutdown();
     font_shutdown();
