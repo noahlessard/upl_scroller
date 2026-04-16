@@ -114,17 +114,6 @@ int main() {
          ClaudeStatusMonitor::POLL_INTERVAL_SEC);
     g_claude_monitor.start();
 
-    // ── Test phase: display initial status alert for 5 seconds ──────────────
-    // Render the status alert once to verify it works, then disable test mode
-    LOG("TEST: displaying Claude status alert (test mode)");
-    g_claude_monitor.render();
-    cairo_surface_flush(g_surface);
-    mpv_present_overlay();
-    LOG("holding for 5 seconds...");
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    g_claude_monitor.end_test_mode();  // Now only show if status is actually down
-    LOG("test mode ended - alert will only show when Claude is down");
-
     // Drain mpv responses
     drain_mpv_replies();
 

@@ -99,7 +99,7 @@ void bounce_load_random_image() {
     auto& paths = get_image_paths();
     if (paths.empty()) {
         LOG("no images found, using placeholder");
-        g_img_surface = image_create_placeholder(120, 120);
+        g_img_surface = image_create_placeholder(MAX_BOUNCE_WIDTH, MAX_BOUNCE_HEIGHT);
         return;
     }
 
@@ -119,14 +119,14 @@ void bounce_load_random_image() {
     }
 
     // Load new image
-    g_img_surface = image_load_jpeg(path, 120, 120);
+    g_img_surface = image_load_jpeg(path, MAX_BOUNCE_WIDTH, MAX_BOUNCE_HEIGHT);
     if (g_img_surface) {
         LOG("loaded bouncing image %dx%d",
             (int)cairo_image_surface_get_width(g_img_surface),
             (int)cairo_image_surface_get_height(g_img_surface));
     } else {
         LOG("failed to load bouncing image %s, using placeholder", path);
-        g_img_surface = image_create_placeholder(100, 100);
+        g_img_surface = image_create_placeholder(MAX_BOUNCE_WIDTH, MAX_BOUNCE_HEIGHT);
     }
 
     g_last_image_change = std::chrono::steady_clock::now();
@@ -143,7 +143,7 @@ bool bounce_update() {
         bounce_load_random_image();
     }
 
-    // image_load_jpeg already scaled to fit 100x100, so surface dims are final
+    // image_load_jpeg already scaled to fit, so surface dims are final
     int img_w = (int)cairo_image_surface_get_width(g_img_surface);
     int img_h = (int)cairo_image_surface_get_height(g_img_surface);
 

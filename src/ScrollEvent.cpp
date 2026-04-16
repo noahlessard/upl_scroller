@@ -59,7 +59,7 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         {"this is a placeholder news scroll"},
         
         // TECHNOLOGY & INNOVATION
-        {"this is a placeholder news scroll"},
+        {"without veneration, holy things swiftly rot to nothing"},
         {"this is a placeholder news scroll"},
         {"this is a placeholder news scroll"},
         {"this is a placeholder news scroll"},
