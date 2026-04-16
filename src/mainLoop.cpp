@@ -108,6 +108,7 @@ int main() {
     // ── Start bouncing animation (scans /static and loads random image) ─────────
     LOG("starting bouncing animation");
     bounce_init(true);
+    logo_init("static/uplLogo.JPG");
 
     // Start Claude status monitoring
     LOG("starting Claude status monitor (polling every %d seconds)",
@@ -128,14 +129,17 @@ int main() {
         bounce_update();
         scroll_update();
 
-        // Draw bouncing image (in front)
-        bounce_draw();
-
         // Draw scrolling text (behind image, at bottom)
         scroll_draw();
 
         // Draw Claude status overlay (top-right, red box if down)
         g_claude_monitor.render();
+
+        // Draw bouncing image (in front)
+        bounce_draw();
+
+        // Draw static UPL logo in top-left (always on top)
+        logo_draw();
 
         mpv_present_overlay();
         std::this_thread::sleep_for(std::chrono::milliseconds(FRAME_MS));

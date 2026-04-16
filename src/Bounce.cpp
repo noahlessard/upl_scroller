@@ -19,6 +19,7 @@ static double  g_bounce_vy = 2.0;
 static bool    g_bounce_enabled = false;
 
 static cairo_surface_t* g_img_surface = nullptr;
+static cairo_surface_t* g_logo_surface = nullptr;
 
 // Random image support
 static std::chrono::steady_clock::time_point g_last_image_change;
@@ -205,10 +206,27 @@ void bounce_draw() {
     cairo_paint(g_cr);
 }
 
+void logo_init(const char* path) {
+    g_logo_surface = image_load_jpeg(path, MAX_BOUNCE_WIDTH, MAX_BOUNCE_HEIGHT);
+    if (!g_logo_surface) {
+        LOG("logo_init: failed to load %s", path);
+    }
+}
+
+void logo_draw() {
+    if (!g_logo_surface) { return; }
+    cairo_set_source_surface(g_cr, g_logo_surface, 0, 0);
+    cairo_paint(g_cr);
+}
+
 void bounce_shutdown() {
     if (g_img_surface) {
         cairo_surface_destroy(g_img_surface);
         g_img_surface = nullptr;
+    }
+    if (g_logo_surface) {
+        cairo_surface_destroy(g_logo_surface);
+        g_logo_surface = nullptr;
     }
     // Free image paths
     auto& paths = get_image_paths();

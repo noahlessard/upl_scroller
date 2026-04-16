@@ -41,3 +41,9 @@ void bounce_draw();
 
 // Free image surface and reset state
 void bounce_shutdown();
+
+// Load the static UPL logo (call once after bounce_init)
+void logo_init(const char* path);
+
+// Draw the UPL logo in the top-left corner (call each frame after bounce_draw)
+void logo_draw();
