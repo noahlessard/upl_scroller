@@ -20,7 +20,7 @@ constexpr double ALERT_BODY_SZ      = 14.0;
 
 // ── Scroll speed & frame timing ───────────────────────────────────────────────
 constexpr float SCROLL_SPEED_PX = 3.0f;  // pixels per frame
-constexpr int   FRAME_MS        = 33;    // ~30 fps
+constexpr int   FRAME_MS        = 60;    // try to match frame rate
 
 
 
