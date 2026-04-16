@@ -125,6 +125,8 @@ int main() {
     // Main loop: keep refreshing so mpv doesn't drop overlay
     // Frame rate: 33ms (defined by constant) with bouncing animation and scrolling text
     while (true) {
+        clear_to_transparent();
+
         // Update animation states
         bounce_update();
         scroll_update();

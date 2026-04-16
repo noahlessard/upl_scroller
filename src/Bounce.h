@@ -5,6 +5,7 @@
 // Bounce Image constants
 constexpr int MAX_BOUNCE_WIDTH = 120;
 constexpr int MAX_BOUNCE_HEIGHT = 120;
+constexpr int LOGO_SIZE = 300;
 
 // Initialize bouncing animation (can be disabled)
 void bounce_init(bool enabled);

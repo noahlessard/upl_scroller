@@ -1,7 +1,6 @@
 #include "Bounce.h"
 #include "mainLoop.h"
 #include "ImageLoader.h"
-#include "CairoOverlay.h"
 #include "Logging.h"
 
 #include <cairo/cairo.h>
@@ -201,13 +200,12 @@ void bounce_draw() {
     bounce_get_position(&x, &y, &w, &h);
     LOG("bouncing at (%d,%d) size %dx%d", x, y, w, h);
 
-    clear_to_transparent();
     cairo_set_source_surface(g_cr, g_img_surface, x, y);
     cairo_paint(g_cr);
 }
 
 void logo_init(const char* path) {
-    g_logo_surface = image_load_jpeg(path, MAX_BOUNCE_WIDTH, MAX_BOUNCE_HEIGHT);
+    g_logo_surface = image_load_jpeg(path, LOGO_SIZE, LOGO_SIZE);
     if (!g_logo_surface) {
         LOG("logo_init: failed to load %s", path);
     }
