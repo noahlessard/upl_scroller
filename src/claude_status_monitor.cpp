@@ -177,6 +177,7 @@ void ClaudeStatusMonitor::check_status() {
         return;
     }
     network_error_.store(false);
+    test_mode_.store(false);
 
     // Response: {"status":{"indicator":"none"|"minor"|"major"|"critical","description":"..."}}
     std::string indicator = extract_json_string(json, "indicator");

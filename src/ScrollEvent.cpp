@@ -50,7 +50,7 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         {"As Bad atime as Any: Every Read a Write"},
         {"Please consult the chart: good thing down, bad thing up"},
         {"Deluzian son or Hegelian daughter?"},
-        {"this is a placeholder news scroll"},
+        {"Come to lightning talks (when they happen)"},
         {"this is a placeholder news scroll"},
         {"this is a placeholder news scroll"},
         {"this is a placeholder news scroll"},
