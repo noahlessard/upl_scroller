@@ -16,7 +16,7 @@ constexpr int BOTTOM_BAR_H  = 23;
 constexpr double LABEL_FONT_SZ      = 12.0;
 constexpr double TICKER_FONT_SZ     = 18.0;   // scrolling ticker
 constexpr double ALERT_TITLE_SZ     = 14.0;
-constexpr double ALERT_BODY_SZ      = 10.0;
+constexpr double ALERT_BODY_SZ      = 14.0;
 
 // ── Scroll speed & frame timing ───────────────────────────────────────────────
 constexpr float SCROLL_SPEED_PX = 3.0f;  // pixels per frame

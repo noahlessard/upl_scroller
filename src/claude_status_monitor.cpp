@@ -44,7 +44,7 @@ void ClaudeStatusMonitor::render() {
     if (network_error_.load()) {
         font_set_size(ALERT_BODY_SZ);
         cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
-        cairo_move_to(g_cr, OVERLAY_X + OVERLAY_W - 40, OVERLAY_Y + 10);
+        cairo_move_to(g_cr, OVERLAY_X + OVERLAY_W - 60, OVERLAY_Y + 10);
         cairo_show_text(g_cr, "OFFLINE");
         return;
     }
@@ -141,7 +141,8 @@ void ClaudeStatusMonitor::fetch_status_html(std::string& response) {
         return;
     }
 
-    curl_easy_setopt(curl, CURLOPT_URL, "https://status.claude.com/");
+    // Use the official Statuspage JSON API instead of scraping HTML
+    curl_easy_setopt(curl, CURLOPT_URL, "https://status.claude.com/api/v2/status.json");
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -155,43 +156,41 @@ void ClaudeStatusMonitor::fetch_status_html(std::string& response) {
     curl_easy_cleanup(curl);
 }
 
-void ClaudeStatusMonitor::check_status() {
-    std::string html;
-    fetch_status_html(html);
+// Extract the value of a JSON string field: "key":"value"
+static std::string extract_json_string(const std::string& json, const std::string& key) {
+    std::string search = "\"" + key + "\":\"";
+    size_t pos = json.find(search);
+    if (pos == std::string::npos) return "";
+    pos += search.size();
+    size_t end = json.find('"', pos);
+    if (end == std::string::npos) return "";
+    return json.substr(pos, end - pos);
+}
 
-    if (html.empty()) {
+void ClaudeStatusMonitor::check_status() {
+    std::string json;
+    fetch_status_html(json);
+
+    if (json.empty()) {
         LOG("Claude status: fetch failed, keeping previous status");
         network_error_.store(true);
         return;
     }
     network_error_.store(false);
 
-    // Claude status page uses CSS classes: status-red, status-orange, status-green, status-none
-    // status-none means all systems operational
-    // status-green means component is OK
+    // Response: {"status":{"indicator":"none"|"minor"|"major"|"critical","description":"..."}}
+    std::string indicator = extract_json_string(json, "indicator");
+    std::string description = extract_json_string(json, "description");
 
-    bool page_ok = html.find("page-status status-none") != std::string::npos ||
-                   html.find("page-status status-green") != std::string::npos;
+    LOG("Claude status API: indicator=%s description=%s", indicator.c_str(), description.c_str());
 
-    // Check if there are any problematic statuses in components
-    bool has_issues = html.find("status-red") != std::string::npos ||
-                      html.find("status-orange") != std::string::npos;
-
-    if (!page_ok || has_issues) {
-        if (html.find("page-status status-red") != std::string::npos ||
-            html.find("page-status status-critical") != std::string::npos) {
-            last_status_ = "critical";
-        } else if (html.find("page-status status-orange") != std::string::npos ||
-                   html.find("status-red") != std::string::npos) {
-            last_status_ = "major";
-        } else {
-            last_status_ = "minor";
-        }
-        is_down.store(true);
-        LOG("Claude status: %s - DOWN", last_status_.c_str());
-    } else {
+    if (indicator == "none") {
         last_status_ = "OK";
         is_down.store(false);
         LOG("Claude status: OK");
+    } else {
+        last_status_ = indicator.empty() ? "unknown" : indicator;
+        is_down.store(true);
+        LOG("Claude status: %s - DOWN (%s)", last_status_.c_str(), description.c_str());
     }
 }

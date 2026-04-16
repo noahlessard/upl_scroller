@@ -133,7 +133,7 @@ int main() {
     mpv_query_props();
 
     // Main loop: keep refreshing so mpv doesn't drop overlay
-    // Frame rate: 100ms (~10fps) with bouncing animation and scrolling text
+    // Frame rate: 33ms (defined by constant) with bouncing animation and scrolling text
     while (true) {
         // Update animation states
         bounce_update();
@@ -149,7 +149,7 @@ int main() {
         g_claude_monitor.render();
 
         mpv_present_overlay();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(FRAME_MS));
     }
 
     // ── Cleanup (unreachable in normal operation) ──────────────────────────────
