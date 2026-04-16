@@ -44,7 +44,7 @@ void ClaudeStatusMonitor::render() {
     if (network_error_.load()) {
         font_set_size(ALERT_BODY_SZ);
         cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
-        cairo_move_to(g_cr, OVERLAY_X + OVERLAY_W - 60, OVERLAY_Y + 10);
+        cairo_move_to(g_cr, OVERLAY_X + OVERLAY_W - 100, OVERLAY_Y + 10);
         cairo_show_text(g_cr, "OFFLINE");
         return;
     }
