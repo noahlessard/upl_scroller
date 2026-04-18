@@ -1,8 +1,6 @@
 #include "claude_status_monitor.h"
-#include <iostream>
 #include <thread>
 #include <chrono>
-#include <atomic>
 #include <string>
 #include <curl/curl.h>
 #include "FontLoader.h"
@@ -28,16 +26,8 @@ void ClaudeStatusMonitor::stop() {
     }
 }
 
-void ClaudeStatusMonitor::end_test_mode() {
-    test_mode_.store(false);
-}
-
 bool ClaudeStatusMonitor::get_is_down() const {
     return is_down.load();
-}
-
-std::string ClaudeStatusMonitor::get_status() const {
-    return last_status_;
 }
 
 void ClaudeStatusMonitor::render() {
@@ -133,7 +123,7 @@ void ClaudeStatusMonitor::render_image(int x, int y, int w, int h) {
     cairo_surface_destroy(scaled);
 }
 
-void ClaudeStatusMonitor::fetch_status_html(std::string& response) {
+void ClaudeStatusMonitor::fetch_status_json(std::string& response) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         LOG("Failed to init curl");
@@ -169,7 +159,7 @@ static std::string extract_json_string(const std::string& json, const std::strin
 
 void ClaudeStatusMonitor::check_status() {
     std::string json;
-    fetch_status_html(json);
+    fetch_status_json(json);
 
     if (json.empty()) {
         LOG("Claude status: fetch failed, keeping previous status");
@@ -186,12 +176,11 @@ void ClaudeStatusMonitor::check_status() {
     LOG("Claude status API: indicator=%s description=%s", indicator.c_str(), description.c_str());
 
     if (indicator == "none") {
-        last_status_ = "OK";
         is_down.store(false);
         LOG("Claude status: OK");
     } else {
-        last_status_ = indicator.empty() ? "unknown" : indicator;
         is_down.store(true);
-        LOG("Claude status: %s - DOWN (%s)", last_status_.c_str(), description.c_str());
+        LOG("Claude status: %s - DOWN (%s)",
+            indicator.empty() ? "unknown" : indicator.c_str(), description.c_str());
     }
 }
