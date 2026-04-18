@@ -75,26 +75,6 @@ void bounce_scan_images(const char* folder) {
     LOG("scanned %zu images in %s", g_image_paths.size(), folder);
 }
 
-const std::vector<const char*>& bounce_get_images() {
-    return get_image_paths();
-}
-
-cairo_surface_t* bounce_get_current_surface() {
-    return g_img_surface;
-}
-
-size_t bounce_get_image_count() {
-    return get_image_paths().size();
-}
-
-void bounce_clear_image_paths() {
-    auto& paths = get_image_paths();
-    for (const char* path : paths) {
-        free((void*)path);
-    }
-    paths.clear();
-}
-
 void bounce_load_random_image() {
     auto& paths = get_image_paths();
     if (paths.empty()) {
