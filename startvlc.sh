@@ -2,10 +2,10 @@
 defaultVol=10
 quietVol=3
 BLANKED=0
-sleep 15
-export DISPLAY=:0
+export DISPLAY=:0 # TODO: check if we still need these
 unset WAYLAND_DISPLAY          # force mpv into X11/EGL mode so overlay-add works
 export XDG_RUNTIME_DIR=/run/user/1000
+cd /home/upl/upl_scroller
 
 # Function to check if current time is within active hours (7PM-3AM)
 is_active_hours() {
@@ -33,11 +33,10 @@ screen_unblank() {
 }
 
 # Initialize: unblank screen and unmute audio
-#screen_unblank
+screen_unblank
 
 # Start audio loop
-# run: aplay -L | grep -i hdmi  to confirm device name
-taskset -c 2 mpv --loop --no-video --audio-device=alsa/hdmi:CARD=vc4hdmi0,DEV=0 /media/upl/W/train.m4a &
+taskset -c 2 mpv --loop --no-video --audio-device=alsa/hdmi:CARD=vc4hdmi,DEV=0 bing.mp3 &
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 rm -f /tmp/mpvsock
@@ -51,9 +50,8 @@ taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
 
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
-cd /home/upl/upl_scroller
-sleep 240
-taskset -c 3 /home/upl/upl_scroller/upl_scroller &
+sleep 200
+taskset -c 3 upl_scroller &
 
 # Testing: ramp down to quiet, hold 2 minutes, ramp back to normal
 for vol in $(seq $defaultVol -1 $quietVol); do

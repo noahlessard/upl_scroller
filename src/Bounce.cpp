@@ -1,6 +1,7 @@
 #include "Bounce.h"
 #include "mainLoop.h"
 #include "ImageLoader.h"
+#include "FontLoader.h"
 #include "Logging.h"
 
 #include <cairo/cairo.h>
@@ -19,6 +20,7 @@ static bool    g_bounce_enabled = false;
 
 static cairo_surface_t* g_img_surface = nullptr;
 static cairo_surface_t* g_logo_surface = nullptr;
+static std::chrono::steady_clock::time_point g_uptime_start;
 
 // Random image support
 static std::chrono::steady_clock::time_point g_last_image_change;
@@ -40,6 +42,7 @@ void bounce_init(bool enabled) {
     g_img_surface = nullptr;
     get_image_paths().clear();
     g_last_image_change = std::chrono::steady_clock::now();
+    g_uptime_start = std::chrono::steady_clock::now();
     // Scan for images on startup
     bounce_scan_images("static/bounce");
     if (!get_image_paths().empty()) {
@@ -195,6 +198,27 @@ void logo_draw() {
     if (!g_logo_surface) { return; }
     cairo_set_source_surface(g_cr, g_logo_surface, 0, 0);
     cairo_paint(g_cr);
+
+    // Draw uptime timer below the logo
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_uptime_start).count();
+    int days = (int)(elapsed / 86400);
+    int hours = (int)((elapsed % 86400) / 3600);
+    int minutes = (int)((elapsed % 3600) / 60);
+    int seconds = (int)(elapsed % 60);
+
+    char time_str[32];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d:%02d", days, hours, minutes, seconds);
+
+    cairo_set_source_rgba(g_cr, 1.0, 0.0, 0.0, 1.0);
+    font_set_size(24.0);
+    cairo_text_extents_t te;
+    cairo_text_extents(g_cr, time_str, &te);
+    int text_x = (OVERLAY_W - (int)te.width) / 2;
+    int text_y = LOGO_SIZE + 30;
+    cairo_move_to(g_cr, (double)text_x, (double)(text_y - te.y));
+    cairo_show_text(g_cr, time_str);
+    cairo_fill(g_cr);
 }
 
 void bounce_shutdown() {
