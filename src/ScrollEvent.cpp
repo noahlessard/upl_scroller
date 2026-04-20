@@ -15,7 +15,7 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         "Claude, make it stop",
         "Senate talks disintegrate as both parties are beset with plagues",
         "Startup raise 40 M+ seed round, offering to build merciful deaths for us all",
-        "Breaking: 300 miles of Connecticut just fell into the ocean",
+        "Nothing human survives the twenty first century",
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",
 
@@ -68,8 +68,8 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         "this is a placeholder news scroll",
 
         // ENTERTAINMENT & MEDIA
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "the quick brown fox lowkey mogs the lazy dog",
+        "feed two birds with one scone",
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",

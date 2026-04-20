@@ -2,19 +2,14 @@
 
 ## How It Works
 
-This app generates a video overlay by combining MPV media playback with real-time text rendering. The overlay is created using:
-
-- **MPV**: A media player that provides an IPC (inter-process communication) interface for controlling playback and rendering a video frame buffer
-- **FreeType**: A font engine that loads the TrueType font (`pix.ttf`) and provides glyph rendering capabilities
-- **Cairo**: A 2D graphics library that draws text onto an offscreen surface, which is then composited as an overlay on top of the MPV video
-
 The rendering pipeline works as follows:
 1. `font_init()` loads the TTF file using FreeType and creates a Cairo font face
-2. Text is drawn onto a Cairo surface with anti-aliasing disabled for crisp, pixel-perfect characters
-3. The Cairo surface (containing the rendered text) is uploaded as a texture overlay onto the MPV video frame
-4. This composite (video + text overlay) is displayed in the MPV window
+2. We load the font for text that gets drawn onto a Cairo surface, along with other graphics like images
+3. This is stored as a shared memory bitmap, an 800x600 BGRA pixel buffer in tmpfs
+4. MPV plays the train video, exposing a JSON-RPC protocol over a unix domain socket (/tmp/mpvsock)
+5. We run the overlay-add command to add our bitmap on top of each frame, before it is composited and rendered
 
-This approach allows dynamic text updates without re-encoding video, making it ideal for scrolling credits, live captions, or other overlay content.
+This approach allows dynamic graphics to be drawn on top of video without re-encoding, making it ideal for low end hardware, like the older Raspberry Pi SBC.
 
 ## Project Structure
 
@@ -26,7 +21,7 @@ upl_scroller/
 ├── README.md               # Project documentation
 ├── build/                  # Build output directory (created during compilation)
 ├── pix.ttf                 # Font file used by the application
-├── soggy.jpg               # Test image for bouncing animation
+├── faucet.jpg              # Test image for bouncing animation
 ├── src/                    # Source code directory
 │   ├── mainLoop.cpp        # Main loop implementation
 │   ├── mainLoop.h          # Main loop header
@@ -44,9 +39,11 @@ upl_scroller/
 │   ├── Logging.h                    # Logging subsystem
 │   ├── MpvIpc.cpp                   # MPV IPC communication
 │   ├── MpvIpc.h                     # MPV IPC communication
-|   ├── claude_status_monitor.cpp    # Polls claude's status page
-|   └── claude_status_monitor.h      # Polls claude's status page
-├── startvlc.sh                      # Shell script to start VLC media player
+│   ├── claude_status_monitor.cpp  # Polls claude's status page
+│   ├── claude_status_monitor.h    # Polls claude's status page
+│   ├── ScrollEvent.cpp            # Scroll event types
+│   └── ScrollEvent.h              # Scroll event types
+├── startvlc.sh                      # Shell script to start mpv and the overlay app
 └── bing.mp3                         # Audio file used by the application
 ```
 
