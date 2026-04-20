@@ -2,11 +2,20 @@
 defaultVol=10
 quietVol=3
 BLANKED=0
-WPCTL_HDMI_ID=56
+WPCTL_HDMI_ID=
 export DISPLAY=:0 # TODO: check if we still need these
 unset WAYLAND_DISPLAY          # force mpv into X11/EGL mode so overlay-add works
 export XDG_RUNTIME_DIR=/run/user/1000
 cd /home/upl/upl_scroller
+
+if [[ -z "$WPCTL_HDMI_ID" ]]; then
+    WPCTL_HDMI_ID=$(wpctl status | grep -i 'hdmi' | grep -oE '\b[0-9]+\.' | tr -d '.' | head -1)
+    if [[ -n "$WPCTL_HDMI_ID" ]]; then
+        wpctl set-default $WPCTL_HDMI_ID
+    else
+        echo "Warning: HDMI audio sink not found, audio may not route correctly"
+    fi
+fi
 
 # Function to check if current time is within active hours (7PM-3AM)
 is_active_hours() {
@@ -37,7 +46,7 @@ screen_unblank() {
 screen_unblank
 
 # Start audio loop
-taskset -c 2 mpv --loop --no-video --audio-device=alsa/hdmi:CARD=vc4hdmi,DEV=0 bing.mp3 &
+taskset -c 2 mpv --loop --no-video bing.mp3 &
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 rm -f /tmp/mpvsock
@@ -52,7 +61,7 @@ taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
 sleep 200
-taskset -c 3 upl_scroller &
+taskset -c 3 /home/upl/upl_scroller/upl_scroller &
 
 # Testing: ramp down to quiet, hold 2 minutes, ramp back to normal
 for vol in $(seq $defaultVol -1 $quietVol); do
