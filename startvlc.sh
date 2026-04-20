@@ -1,5 +1,6 @@
 #!/bin/bash
 defaultVol=10
+quietVol=3
 BLANKED=0
 sleep 15
 export DISPLAY=:0
@@ -19,14 +20,15 @@ is_active_hours() {
 # Function to blank the screen and mute audio
 screen_blank() {
     vcgencmd display_power 0
-    amixer set PCM 0%
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 1
     BLANKED=1
 }
 
 # Function to unblank the screen and unmute audio
 screen_unblank() {
     vcgencmd display_power 1
-    amixer set PCM $defaultVol%
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ ${defaultVol}%
     BLANKED=0
 }
 
@@ -34,15 +36,10 @@ screen_unblank() {
 #screen_unblank
 
 # Start audio loop
-#taskset -c 2 cvlc --loop /media/upl/W/train.m4a &
-
-#sleep 5
+# run: aplay -L | grep -i hdmi  to confirm device name
+taskset -c 2 mpv --loop --no-video --audio-device=alsa/hdmi:CARD=vc4hdmi0,DEV=0 /media/upl/W/train.m4a &
 
 # Start MPV fullscreen with IPC socket for overlay-add support
-# --hwdec=auto  : use Pi hardware video decoder (saves CPU)
-# --vo=gpu      : use GPU video output (faster)
-# --gpu-context=egl : share GPU context with display system
-# --no-terminal : suppress terminal output
 rm -f /tmp/mpvsock
 taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     --hwdec=auto \
@@ -52,15 +49,24 @@ taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
     /media/upl/W/train.mp4 \
     >/tmp/mpv.log 2>&1 &
 
-#sleep 5
 
 # Start the overlay app (connects to MPV socket, draws via overlay-add)
 cd /home/upl/upl_scroller
 sleep 240
 taskset -c 3 /home/upl/upl_scroller/upl_scroller &
 
-# Sleep for 2 minutes (testing window)
-# sleep 120
+# Testing: ramp down to quiet, hold 2 minutes, ramp back to normal
+for vol in $(seq $defaultVol -1 $quietVol); do
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ ${vol}%
+    sleep 10
+done
+
+sleep 10
+
+for vol in $(seq $quietVol 1 $defaultVol); do
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ ${vol}%
+    sleep 10
+done
 
 # # Main scheduling loop
 # while true; do
@@ -76,11 +82,11 @@ taskset -c 3 /home/upl/upl_scroller/upl_scroller &
 #             if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
 #                 sleep 10
 #                 loopCount=$(($loopCount + 1))
-#                 amixer set PCM ${loopCount}%
+#                 wpctl set-volume @DEFAULT_AUDIO_SINK@ ${loopCount}%
 #             elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
 #                 sleep 10
 #                 loopCount=$(($loopCount - 1))
-#                 amixer set PCM ${loopCount}%
+#                 wpctl set-volume @DEFAULT_AUDIO_SINK@ ${loopCount}%
 #             elif [ "$loopCount" -ge 60 ]; then
 #                 inc=0
 #             else
