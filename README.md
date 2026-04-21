@@ -1,4 +1,16 @@
-# UPL Scroller
+# UPL Scroller (Train Cam)
+
+This is the codebase that plays the UPL train cam, a real life TV that plays train footage and audio 24/7 in the UPL at UW Madison. The bash script controls startup and shutdown, as well as audio, while the C++ executable controls overlay graphics. This is done with IPC between MPV and a shared memory Cairo bitmap. It also uses cross compilation docker containers to test compiling on my 64 bit machine before deploying to the ARM raspberry pi 3 board, and run static analysis as well.
+
+Some features:
+* UPL train logo and uptime counter in the top left
+* Newswire events scrolls across the bottom
+* Randomly chosen cat images bounce around like a DVD screensaver
+* A background thread polls claud's status api, if its not operational, an alert will show
+* Train audio will play in the background, ramping up from silent to a quiet background ambience, then ramp back down
+
+All of this combines for a rich, train based multimedia experience in the UPL, which is needed of course since the new UPL is further from the train tracks that run through Madison.
+
 
 ## How It Works
 
@@ -10,6 +22,8 @@ The rendering pipeline works as follows:
 5. We run the overlay-add command to add our bitmap on top of each frame, before it is composited and rendered
 
 This approach allows dynamic graphics to be drawn on top of video without re-encoding, making it ideal for low end hardware, like the older Raspberry Pi SBC.
+
+The audio feature works by grepping the wpctl output, grabbing the node and sink for HDMI audio output, then setting that as the default and controlling the volume through it. Using Pipewire allows for easy control of audio levels and consistent output, and it is installed by default on Raspberry Pi's Debian OS.
 
 ## Project Structure
 
