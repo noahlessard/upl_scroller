@@ -2,14 +2,14 @@
 defaultVol=10
 quietVol=3
 BLANKED=0
-WPCTL_HDMI_ID=
+WPCTL_HDMI_ID=    # leave blank for automation
 export DISPLAY=:0 # TODO: check if we still need these
 unset WAYLAND_DISPLAY          # force mpv into X11/EGL mode so overlay-add works
 export XDG_RUNTIME_DIR=/run/user/1000
 cd /home/upl/upl_scroller
 
 if [[ -z "$WPCTL_HDMI_ID" ]]; then
-    WPCTL_HDMI_ID=$(wpctl status | grep -i 'hdmi' | grep -oE '\b[0-9]+\.' | tr -d '.' | head -1)
+    WPCTL_HDMI_ID=$(wpctl status | awk '/Sinks:/,/Sources:/' | grep -i 'hdmi' | grep -oE '[0-9]+\.' | tr -d '.' | head -1)
     if [[ -n "$WPCTL_HDMI_ID" ]]; then
         wpctl set-default $WPCTL_HDMI_ID
     else
