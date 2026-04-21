@@ -79,10 +79,10 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",
 
-        // TRANSPORTATION & TRAVEL
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        // mandarin
+        "他沒有點名提及山姆·奧特曼，也沒有提及我的男朋友'Claude'。",
+        "遺憾的是，他沒有提到'Young Wu'。我很抱歉。",
+        "我是1600年的農夫。這是什麼意思",
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",
         "this is a placeholder news scroll",
