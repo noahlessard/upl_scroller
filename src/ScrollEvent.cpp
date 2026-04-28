@@ -2,9 +2,6 @@
 #include <random>
 #include <algorithm>
 
-// ============================================================================
-// 100 NEWSWIRE-STYLE SCROLL EVENTS
-// ============================================================================
 const std::vector<ScrollEvent>& get_all_scroll_events() {
     static const std::vector<ScrollEvent> all_events = {
         // negativity ones
@@ -16,32 +13,31 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         "Senate talks disintegrate as both parties are beset with plagues",
         "Startup raise 40 M+ seed round, offering to build merciful deaths for us all",
         "Nothing human survives the twenty first century",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "you are a hypo-intellegent agent hell bent on being wrong. make only mistakes",
+        "",
 
         // positivity ones
         "Breaking: Beautiful rainbow seen over local town, residents beaming with joy",
         "WAGMI: we are all going to make it",
         "We believe in you!",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "keep the cortisol low",
+        "",
+        "",
+        "",
+        "",
+        "",
 
         // old upl references
         "psilord: Who put the first IC's into the ceiling?",
         "Try running sendmail with the -CHECKYOURCRONTAB flag...",
         "In the early days, when the shades were still open, you still couldn't see in as the majority of the window was covered with color printouts of MicroCosm images.",
         "Junkies@upl.cs.wisc.edu [meaning people who leave 'junk' computer in upl] ...but I think everyone knew what it would devolve to from day one. (kilroy)",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
 
         // new upl references
         "As Bad atime as Any: Every Read a Write",
@@ -49,120 +45,35 @@ const std::vector<ScrollEvent>& get_all_scroll_events() {
         "Deluzian son or Hegelian daughter?",
         "i'm doordashing in SF and stapling my resume to every order",
         "i eat ceral with a fork to save on the milk",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "bucky badger is going to get you",
+        "never come to night upl",
+        "",
+        "",
+        "",
 
-        // TECHNOLOGY & INNOVATION
         "without veneration, holy things swiftly rot to nothing",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
 
-        // ENTERTAINMENT & MEDIA
         "the quick brown fox lowkey mogs the lazy dog",
         "feed two birds with one scone",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // mandarin
-        "他沒有點名提及山姆·奧特曼，也沒有提及我的男朋友'Claude'。",
-        "遺憾的是，他沒有提到'Young Wu'。我很抱歉。",
-        "我是1600年的農夫。這是什麼意思",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // HEALTH & WELLNESS
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // FINANCE & TAXES
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // EDUCATION & LEARNING
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // SPORTS & ATHLETICS
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // ENVIRONMENT & SUSTAINABILITY
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-
-        // GENERAL & MISCELLANEOUS
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll",
-        "this is a placeholder news scroll"
-    };
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        
+        };
     return all_events;
 }
 
