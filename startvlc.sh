@@ -1,12 +1,17 @@
 #!/bin/bash
-defaultVol=10
+defaultVol=35
+quietVol=8
 BLANKED=0
-sleep 15
-export DISPLAY=:0
-export WAYLAND_DISPLAY=wayland-0
+export DISPLAY=:0 # TODO: check if we still need these
+unset WAYLAND_DISPLAY          # force mpv into X11/EGL mode so overlay-add works
 export XDG_RUNTIME_DIR=/run/user/1000
+cd /home/upl/upl_scroller
 
-# Function to check if current time is within active hours (7PM-3AM)
+# Get default HDMI ID from Sink ( should be set manually with Pi GUI once at boot )
+if [[ -z "$WPCTL_HDMI_ID" ]]; then
+    WPCTL_HDMI_ID=$(wpctl status | awk '/Sinks:/' | grep -i 'hdmi' | grep -oE '[0-9]+\.' | tr -d '.' | head -1)
+fi
+
 is_active_hours() {
     current_hour=$(date +%H)
     if [[ $current_hour -ge 19 ]] || [[ $current_hour -lt 3 ]]; then
@@ -16,72 +21,79 @@ is_active_hours() {
     fi
 }
 
-# Function to blank the screen and mute audio
 screen_blank() {
     vcgencmd display_power 0
-    amixer set PCM 0%
     BLANKED=1
 }
 
-# Function to unblank the screen and unmute audio
 screen_unblank() {
     vcgencmd display_power 1
-    amixer set PCM $defaultVol%
     BLANKED=0
 }
 
-# Initialize: unblank screen and unmute audio
 screen_unblank
+wpctl set-volume $WPCTL_HDMI_ID ${quietVol}%
 
-# Start VLC and foot processes
-taskset -c 2 cvlc --loop /home/upl/train.m4a&
-sleep 5
-taskset -c 2 vlc --loop --fullscreen /home/upl/train.mp4&
-sleep 5
-cd /home/upl/notcursesTesting
-sleep 15
-taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
 
-# Sleep for 2 minutes (testing window)
-sleep 120
+# Start audio loop
+taskset -c 2 mpv --loop --no-video bing.mp3 &
+
+# Start MPV fullscreen with IPC socket for overlay-add support
+rm -f /tmp/mpvsock
+taskset -c 2 nice -n 19 mpv --loop --fullscreen --no-terminal \
+    --hwdec=auto \
+    --geometry=800x600 \
+    --keepaspect=no \
+    --input-ipc-server=/tmp/mpvsock \
+    /media/upl/W/train.mp4 \
+    >/tmp/mpv.log 2>&1 &
+
+
+# Start the overlay app (connects to MPV socket, draws via overlay-add)
+sleep 200
+taskset -c 3 /home/upl/upl_scroller/upl_scroller &
+
 
 # Main scheduling loop
 while true; do
+
     if is_active_hours; then
-        # Currently active hours
+
+        # Active hours — ensure screen is on
         if [[ $BLANKED -eq 1 ]]; then
-            # Was blanked, now need to unblank
             screen_unblank
         fi
-        # Run volume ramp logic here
-        inc=1
-        loopCount=$defaultVol
+
+        # Volume ramp cycle: quietVol -> defaultVol -> quietVol
+        direction=1  # 1 = ramping up, 0 = ramping down
+        vol=$quietVol
+
         while true; do
-            echo "$inc"
-            echo "$loopCount"
-            if [[ "$inc" -eq 1 && "$loopCount" -lt 60 ]]; then
-                sleep 10
-                loopCount=$(($loopCount + 1))
-                amixer set PCM ${loopCount}%
-            elif [[ "$inc" -eq 0 && "$loopCount" -gt $defaultVol ]]; then
-                sleep 10
-                loopCount=$(($loopCount - 1))
-                amixer set PCM ${loopCount}%
-            elif [ "$loopCount" -ge 60 ]; then
-                inc=0
+            wpctl set-volume $WPCTL_HDMI_ID ${vol}%
+            sleep 30
+            if [[ $direction -eq 1 ]]; then
+                vol=$((vol + 1))
+                if [[ $vol -ge $defaultVol ]]; then
+                    direction=0
+                fi
             else
-                inc=1
-                taskset -c 3 foot --window-size-pixels=1200x500 bash -c "/home/upl/notcursesTesting/myapp; exec bash" &
-                sleep 1200
+                vol=$((vol - 1))
+                if [[ $vol -le $quietVol ]]; then
+                    break
+                fi
             fi
         done
+
+        # Full ramp cycle complete — sleep random 12-24 hours
+        sleep_seconds=$(( (RANDOM % 43200) + 43200 ))
+        sleep $sleep_seconds
+
     else
-        # Currently blank hours
         if [[ $BLANKED -eq 0 ]]; then
-            # Was active, now need to blank
             screen_blank
         fi
     fi
+
+    # Check every 60 seconds before checking again
     sleep 60
 done
-

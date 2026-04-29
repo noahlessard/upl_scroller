@@ -1,0 +1,42 @@
+services:
+  static-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: upl-scroller-static-analysis
+    volumes:
+      - .:/work
+    working_dir: /work
+    command: >
+      bash -c "
+        mkdir -p build-analysis && cd build-analysis &&
+        cmake .. -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > /dev/null 2>&1 &&
+        echo '=== CLANG-TIDY RESULTS START ===' &&
+        clang-tidy -p /work/build-analysis -checks='bugprone-*,modernize-*,performance-*,readability-*,cppcoreguidelines-*,clang-analyzer-*' --header-filter='.*' /work/src/*.cpp 2>&1 &&
+        echo '=== CLANG-TIDY RESULTS END ==='
+      "
+
+  cross-compile:
+    build:
+      context: .
+      dockerfile: Dockerfile.cross
+    container_name: upl-scroller-cross-compile
+    volumes:
+      - .:/work
+    working_dir: /work
+    command: >
+      bash -c "
+        mkdir -p build-arm && cd build-arm &&
+        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig cmake .. -DCMAKE_TOOLCHAIN_FILE=../toolchain-arm.cmake >/dev/null 2>/tmp/build_out.txt &&
+        make >/dev/null 2>>/tmp/build_out.txt ;
+        BUILD_EXIT=$$? ;
+        echo '=== BUILD OUTPUT START ===' ;
+        cat /tmp/build_out.txt ;
+        echo '=== BUILD OUTPUT END ===' ;
+        if [ $$BUILD_EXIT -eq 0 ]; then
+          echo 'Build succeeded. ARM binary: build-arm/upl_scroller' ;
+        else
+          echo 'Build FAILED (exit code '$$BUILD_EXIT')' ;
+          exit $$BUILD_EXIT ;
+        fi
+      "

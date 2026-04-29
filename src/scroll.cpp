@@ -1,139 +1,172 @@
 #include "scroll.h"
-#include <algorithm>
-#include <cstdio>
+#include "mainLoop.h"
+#include "CairoOverlay.h"
+#include "MpvIpc.h"
 
-std::pair<float, float> calc_sync_speeds(int len1, int len2, unsigned win_width, float base_speed) {
-    float dist1    = len1 * BIG_FONT_SPACING + win_width;
-    float dist2    = len2 * BIG_FONT_SPACING + win_width;
-    float max_dist = std::max(dist1, dist2);
-    return { base_speed * (max_dist / dist1), base_speed * (max_dist / dist2) };
+#include <cairo/cairo.h>
+#include <unistd.h>
+#include <chrono>
+
+// ============================================================================
+// SCROLLING STATE MACHINE
+// ============================================================================
+enum class ScrollState {
+    Initialized,
+    Scrolling,      // Text is moving left to right
+    Waiting         // Solid green background, no text
+};
+
+// Timing configuration (in frames at 100ms = 10fps)
+static constexpr int WAIT_DURATION_FRAMES = 150;  // 15 seconds
+
+// ============================================================================
+// SCROLL STATE
+// ============================================================================
+static ScrollState g_scroll_state = ScrollState::Initialized;
+static float       g_scroll_x     = 0.0f;
+static int         g_wait_frames_remaining = 0;
+
+// Current events being scrolled
+static size_t                   g_current_event_index = 0;
+
+// Text rendering state
+static float       g_text_width = 0.0f;
+static int         g_text_baseline = 0;
+static int         g_letter_spacing = 2;  // pixels between events
+
+// Accessors for state that avoids non-POD static warnings
+static std::vector<ScrollEvent>& get_events() {
+    static std::vector<ScrollEvent> events;
+    return events;
 }
 
-// Loads a letter PNG once, blits + recolors it, returns the plane.
-// Caller owns the plane; pass anchor as parent so it follows anchor moves.
-static ncplane* create_letter_plane(notcurses* nc, ncplane* parent, char letter, int y, int x,
-    uint32_t fg_color, uint32_t bg_color) {
-    char filename[256];
-    snprintf(filename, sizeof(filename), "%s/letter_%c.png", FONTS_PATH, letter);
-    ncvisual* nv = ncvisual_from_file(filename);
-    if (!nv) return nullptr;
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+void scroll_init() {
+    // Initialize Cairo for text measurements
+    cairo_set_font_size(g_cr, TICKER_FONT_SZ);
 
-    struct ncplane_options popts = {
-        .y = y, .x = x,
-        .rows = BIG_FONT_ROW_SIZE, .cols = BIG_FONT_COLS_SIZE,
-    };
-    ncplane* child = ncplane_create(parent, &popts);
-    if (!child) { ncvisual_destroy(nv); return nullptr; }
+    // Load initial random events
+    get_events() = get_random_events(10);
 
-    struct ncvisual_options vopts = {
-        .n       = child,
-        .scaling = NCSCALE_STRETCH,
-        .blitter = NCBLIT_2x2,
-    };
-    ncvisual_blit(nc, nv, &vopts);
-    ncvisual_destroy(nv);
+    if (!get_events().empty()) {
+        cairo_text_extents_t ext;
+        cairo_text_extents(g_cr, get_events()[0].c_str(), &ext);
+        g_text_width = (float)ext.width;
+        g_text_baseline = (int)(OVERLAY_H - BOTTOM_BAR_H + TICKER_FONT_SZ * 1);
 
-    // Remap bright pixels → fg_color, dark pixels → bg_color
-    for (unsigned row = 0; row < BIG_FONT_ROW_SIZE; row++) {
-        for (unsigned col = 0; col < BIG_FONT_COLS_SIZE; col++) {
-            nccell c = NCCELL_TRIVIAL_INITIALIZER;
-            if (ncplane_at_yx_cell(child, row, col, &c) < 0) continue;
-
-            auto lum = [](uint32_t rgb) {
-                return ((rgb >> 16) & 0xFF) + ((rgb >> 8) & 0xFF) + (rgb & 0xFF);
-            };
-            nccell_set_fg_rgb(&c, lum(nccell_fg_rgb(&c)) > 384 ? fg_color : bg_color);
-            nccell_set_bg_rgb(&c, lum(nccell_bg_rgb(&c)) > 384 ? fg_color : bg_color);
-
-            ncplane_putc_yx(child, row, col, &c);
-            nccell_release(child, &c);
-        }
+        g_scroll_state = ScrollState::Scrolling;
+        g_scroll_x = (float)OVERLAY_W;  // Start off-screen to the right
     }
-    return child;
 }
 
+// ============================================================================
+// SCROLL LOGIC
+// ============================================================================
+static void next_event() {
+    if (get_events().empty()) {
+        g_scroll_state = ScrollState::Waiting;
+        g_wait_frames_remaining = WAIT_DURATION_FRAMES;
+        return;
+    }
 
-Scroll::Scroll(std::string_view text_, int y_, float speed_, ScrollDirection dir_,
-    unsigned win_width, uint32_t fg_color_, uint32_t bg_color_)
-    : text(text_), y(y_), speed(speed_), dir(dir_),
-      accumulator(0.f), done(false), plane(nullptr),
-      fg_color(fg_color_), bg_color(bg_color_)
-{
-    // this needs to change depending on left or right
-    scroll_x = (dir == SCROLL_RIGHT)
-        ? -BIG_FONT_SPACING * (int)text.size()
-        :  (int)win_width;
+    // Move to the next event (don't reset to 0)
+    if (g_current_event_index < get_events().size()) {
+        cairo_text_extents_t ext;
+        cairo_text_extents(g_cr, get_events()[g_current_event_index].c_str(), &ext);
+        g_text_width = (float)ext.width;
+        g_scroll_x = (float)OVERLAY_W;
+        g_current_event_index++;
+    }
 }
 
-void run_scrolls(notcurses* nc, ncplane* std_plane, std::vector<Scroll>& scrolls) {
-    float tick = scrolls[0].speed;
-    for (auto& s : scrolls)
-        tick = std::min(tick, s.speed);
+// ============================================================================
+// UPDATE - Called every frame (~10fps)
+// ============================================================================
+bool scroll_update() {
+    if (g_scroll_state == ScrollState::Scrolling) {
+        // Move scroll position
+        g_scroll_x -= SCROLL_SPEED_PX;
 
-    unsigned h, w;
-    ncplane_dim_yx(std_plane, &h, &w);
+        // Check if event is fully off-screen
+        if (g_scroll_x + g_text_width < 0) {
+            next_event();
+        }
 
-    // Build one transparent anchor plane per scroll; letter planes are children at fixed
-    // relative offsets. A single ncplane_move_yx on the anchor moves everything together.
-    for (auto& s : scrolls) {
-        int len = (int)s.text.size();
+        // Check if all events completed
+        if (g_current_event_index >= get_events().size()) {
+            g_scroll_state = ScrollState::Waiting;
+            g_wait_frames_remaining = WAIT_DURATION_FRAMES;
+        }
+    }
+    else if (g_scroll_state == ScrollState::Waiting) {
+        g_wait_frames_remaining--;
 
-        struct ncplane_options anchor_opts = {
-            .y    = s.y,
-            .x    = s.scroll_x,
-            .rows = BIG_FONT_ROW_SIZE,
-            .cols = (unsigned)(len * BIG_FONT_SPACING + BIG_FONT_COLS_SIZE),
-        };
-        s.plane = ncplane_create(std_plane, &anchor_opts);
-
-        nccell bc = NCCELL_TRIVIAL_INITIALIZER;
-        nccell_set_fg_alpha(&bc, NCALPHA_TRANSPARENT);
-        nccell_set_bg_alpha(&bc, NCALPHA_TRANSPARENT);
-        ncplane_set_base_cell(s.plane, &bc);
-        nccell_release(s.plane, &bc);
-
-        s.planes.resize(len, nullptr);
-        for (int i = 0; i < len; i++) {
-            if (s.text[i] != ' ')
-                s.planes[i] = create_letter_plane(nc, s.plane, s.text[i],
-                                                  0, i * BIG_FONT_SPACING,
-                                                  s.fg_color, s.bg_color);
+        if (g_wait_frames_remaining <= 0) {
+            // Wait complete, start scrolling with new random events
+            scroll_refresh_events();
+            g_scroll_state = ScrollState::Scrolling;
+            g_scroll_x = (float)OVERLAY_W;
         }
     }
 
-    while (true) {
-        for (auto& s : scrolls)
-            if (!s.done)
-                ncplane_move_yx(s.plane, s.y, s.scroll_x);
+    // Return true if there's text currently being displayed
+    return (g_scroll_state == ScrollState::Scrolling) || !get_events().empty();
+}
 
-        notcurses_render(nc);
+// ============================================================================
+// DRAW - Called every frame
+// ============================================================================
+void scroll_draw() {
+    // Draw green background bar
+    cairo_set_source_rgba(g_cr, 0.0f, 1.0f, 0.0f, 1.0f);  // Green
+    cairo_rectangle(g_cr,
+        0,
+        OVERLAY_H - BOTTOM_BAR_H,
+        OVERLAY_W,
+        BOTTOM_BAR_H);
+    cairo_fill(g_cr);
 
-        bool all_done = true;
-        for (auto& s : scrolls) {
-            s.accumulator += tick;
-            if (s.accumulator >= s.speed) {
-                s.accumulator -= s.speed;
-
-                s.scroll_x += (s.dir == SCROLL_RIGHT) ? 1 : -1;
-
-                // Done when the LAST letter to exit has fully left the screen:
-                //   SCROLL_RIGHT → leftmost letter (scroll_x) clears the right edge
-                //   SCROLL_LEFT  → rightmost letter clears the left edge
-                int last_x = s.scroll_x + (int)(s.text.size() - 1) * BIG_FONT_SPACING;
-                s.done = (s.dir == SCROLL_RIGHT)
-                    ? s.scroll_x >= (int)w
-                    : last_x     <= -BIG_FONT_SPACING;
-            }
-            if (!s.done) all_done = false;
-        }
-        if (all_done) break;
-        usleep(tick * 1000000);
+    // Don't draw text while waiting
+    if (g_scroll_state == ScrollState::Waiting || get_events().empty()) {
+        return;
     }
 
-    for (auto& s : scrolls) {
-        for (auto* p : s.planes)
-            if (p) ncplane_destroy(p);
-        s.planes.clear();
-        if (s.plane) { ncplane_destroy(s.plane); s.plane = nullptr; }
+    // Draw scrolling text
+    cairo_set_font_size(g_cr, TICKER_FONT_SZ);
+    cairo_set_source_rgba(g_cr, 0.0f, 0.0f, 0.0f, 1.0f);  // Black text
+    cairo_move_to(g_cr, g_scroll_x, (float)g_text_baseline);
+    cairo_show_text(g_cr, get_events()[g_current_event_index > 0 ? g_current_event_index - 1 : 0].c_str());
+}
+
+// ============================================================================
+// EVENT REFRESH - Called every minute
+// ============================================================================
+void scroll_refresh_events() {
+    get_events() = get_random_events(10);
+
+    if (!get_events().empty()) {
+        g_current_event_index = 0;
+
+        cairo_text_extents_t ext;
+        cairo_text_extents(g_cr, get_events()[0].c_str(), &ext);
+        g_text_width = (float)ext.width;
+
+        g_text_baseline = (int)(OVERLAY_H - BOTTOM_BAR_H + TICKER_FONT_SZ * 1);
+
+        g_scroll_x = (float)OVERLAY_W;
     }
+}
+
+// ============================================================================
+// SHUTDOWN
+// ============================================================================
+void scroll_shutdown() {
+    g_scroll_state = ScrollState::Initialized;
+    g_scroll_x = 0.0f;
+    g_wait_frames_remaining = 0;
+    get_events().clear();
+    g_current_event_index = 0;
+    g_text_width = 0.0f;
 }

@@ -1,13 +1,30 @@
 #pragma once
+#include <cairo/cairo.h>
 #include <string_view>
-#include <vector>
 #include <string>
-constexpr unsigned BIG_FONT_ROW_SIZE  = 20;
-constexpr unsigned BIG_FONT_COLS_SIZE = 22;
-constexpr int      BIG_FONT_SPACING   = 10;
-constexpr double   SPEED              = 0.1;
 
-static void run_reel(std::string_view text, float speed);
-static void returnToNormalBoarder(bool textAtBottom);
-static std::vector<std::string> wrapText(std::string_view text, unsigned max_width);
-static void createAlertWindow(std::string_view titleText, std::string_view bodyText, float duration);
+// ── Overlay geometry (800×600 display) ───────────────────────────────────────
+constexpr int OVERLAY_W = 800;
+constexpr int OVERLAY_H = 600;
+constexpr int OVERLAY_X = 0;   // full width
+constexpr int OVERLAY_Y = 0;   // full height
+
+// ── Bar / border sizes ────────────────────────────────────────────────────────
+constexpr int BOTTOM_BAR_H  = 23;
+
+// ── Font sizes ────────────────────────────────────────────────────────────────
+constexpr double LABEL_FONT_SZ      = 12.0;
+constexpr double TICKER_FONT_SZ     = 18.0;   // scrolling ticker
+constexpr double ALERT_TITLE_SZ     = 16.0;
+constexpr double ALERT_BODY_SZ      = 16.0;
+
+// ── Scroll speed & frame timing ───────────────────────────────────────────────
+constexpr float SCROLL_SPEED_PX = 3.0f;  // pixels per frame
+constexpr int   FRAME_MS        = 60;    // try to match frame rate
+
+
+
+// ── Shared Cairo state (defined in mainLoop.cpp, used by modules) ────────────
+extern cairo_surface_t* g_surface;
+extern cairo_t*         g_cr;
+extern int              g_mpv_sock;

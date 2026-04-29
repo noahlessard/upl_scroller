@@ -1,148 +1,161 @@
-#include "scroll.h"
 #include "mainLoop.h"
+#include "Logging.h"
+#include "MpvIpc.h"
+#include "CairoOverlay.h"
+#include "Bounce.h"
+#include "FontLoader.h"
+#include "scroll.h"
+#include "ScrollEvent.h"
+#include "claude_status_monitor.h"
+
+#include <cairo/cairo.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#include <cstdint>
+#include <cstdio>
 #include <thread>
 #include <chrono>
-#include <cstdlib>
 
-static void playMp3(const char* path) {
-    system("amixer set PCM 60% 2>&1 >/dev/null");
-    system(("cvlc --play-and-exit " + std::string(path) + " 2> /dev/null").c_str());
-    system("amixer set PCM 10% 2>&1 >/dev/null");
-}
+// ── Globals ───────────────────────────────────────────────────────────────────
+cairo_surface_t* g_surface  = nullptr;
+cairo_t*         g_cr       = nullptr;
+int              g_mpv_sock = -1;
+static uint8_t*  g_shm_data = nullptr;
+static int       g_shm_size = 0;
 
-ncplane* std_plane;
-unsigned win_height, win_width;
-notcurses* nc;
+ClaudeStatusMonitor g_claude_monitor;
 
-static void run_reel(std::string_view text, float speed) {
-    returnToNormalBoarder(false);
-    struct ncplane_options opts = {
-        .y    = (int)win_height - 1,
-        .x    = (int)win_width,
-        .rows = 1,
-        .cols = (unsigned)text.size(),
-    };
-    ncplane* rplane = ncplane_create(std_plane, &opts);
-    ncplane_set_fg_rgb8(rplane, 0, 0, 0);
-    ncplane_set_bg_rgb8(rplane, 0, 255, 0);
-    ncplane_putstr(rplane, text.data());
-    
-    int x = (int)win_width;
-    int len = (int)text.size();
-    
-    // Scroll once
-    while (x + len > 0) {
-        ncplane_move_yx(rplane, (int)win_height - 1, x);
-        notcurses_render(nc);
-        --x;
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)(speed * 1000)));
+static constexpr const char* SHM_PATH = "/dev/shm/overlay.bgra";
+
+// ── SHM/Cairo init ────────────────────────────────────────────────────────────
+static bool init_shm_cairo() {
+    int stride = OVERLAY_W * 4;
+    int shm_size = stride * OVERLAY_H;
+
+    LOG("shm: opening %s (size=%d)", SHM_PATH, shm_size);
+    int fd = open(SHM_PATH, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        LOG("shm: open failed: %s", strerror(errno));
+        return false;
     }
-    
-    ncplane_destroy(rplane);
-    returnToNormalBoarder(true);
-
-}
-
-static void returnToNormalBoarder(bool textAtBottom) {
-    ncplane_erase(std_plane);
-
-    uint64_t chan = 0;
-    ncchannels_set_fg_rgb8(&chan, 0, 0, 0);
-    ncchannels_set_bg_rgb8(&chan, 0, 255, 0);
-    ncplane_rounded_box(std_plane, 0, chan, win_height - 1, win_width - 1, 0);
-
-    // Text at top and bottom — green background, black foreground
-    ncplane_set_fg_rgb8(std_plane, 0, 0, 0);
-    ncplane_set_bg_rgb8(std_plane, 0, 255, 0);
-    ncplane_putstr_yx(std_plane, 0, 2, " UPL TRAIN CAM ");
-    if (textAtBottom)
-        ncplane_putstr_yx(std_plane, (int)win_height - 1, 2, " 24 HRS A DAY ");
-
-    notcurses_render(nc);
-
-}
-
-static std::vector<std::string> wrapText(std::string_view text, unsigned max_width) {
-    std::vector<std::string> lines;
-    size_t pos = 0;
-    while (pos < text.length()) {
-        size_t end = pos + max_width;
-        if (end >= text.length()) {
-            lines.push_back(std::string(text.substr(pos)));
-            break;
-        }
-        size_t space_pos = text.rfind(' ', end);
-        if (space_pos == std::string::npos || space_pos <= pos)
-            space_pos = end;
-        lines.push_back(std::string(text.substr(pos, space_pos - pos)));
-        pos = text.find_first_not_of(' ', space_pos);
-        if (pos == std::string::npos) break;
+    if (ftruncate(fd, shm_size) < 0) {
+        LOG("shm: ftruncate failed: %s", strerror(errno));
+        close(fd);
+        return false;
     }
-    return lines;
+
+    g_shm_data = (uint8_t*)mmap(nullptr, shm_size,
+                                PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (g_shm_data == MAP_FAILED) {
+        LOG("shm: mmap failed: %s", strerror(errno));
+        return false;
+    }
+    g_shm_size = shm_size;
+    LOG("shm: mmap OK at %p (%d bytes)", (void*)g_shm_data, g_shm_size);
+
+    // CAIRO_FORMAT_ARGB32 = premul ARGB in native 32-bit order
+    // On little-endian (Pi) bytes in memory are: B G R A  →  exactly MPV's BGRA
+    g_surface = cairo_image_surface_create_for_data(
+        g_shm_data, CAIRO_FORMAT_ARGB32, OVERLAY_W, OVERLAY_H, stride);
+    g_cr = cairo_create(g_surface);
+
+    cairo_status_t ss = cairo_surface_status(g_surface);
+    cairo_status_t cs = cairo_status(g_cr);
+    LOG("cairo surface status: %s", cairo_status_to_string(ss));
+    LOG("cairo context status: %s", cairo_status_to_string(cs));
+    return ss == CAIRO_STATUS_SUCCESS && cs == CAIRO_STATUS_SUCCESS;
 }
 
-static void createAlertWindow(std::string_view titleText, std::string_view bodyText, float duration) {
-    constexpr unsigned MAX_CONTENT_WIDTH = 40;
-    constexpr unsigned BOX_PADDING = 4;
-
-    auto wrapped_lines = wrapText(bodyText, MAX_CONTENT_WIDTH);
-    unsigned box_width  = MAX_CONTENT_WIDTH + BOX_PADDING;
-    unsigned box_height = wrapped_lines.size() + 4;
-
-    struct ncplane_options opts = {
-        .y    = (int)(win_height - box_height) / 2,
-        .x    = (int)(win_width  - box_width)  / 2,
-        .rows = (int)box_height,
-        .cols = (int)box_width,
-    };
-    ncplane* alert_plane = ncplane_create(std_plane, &opts);
-
-    ncplane_set_fg_rgb8(alert_plane, 255, 255, 255);
-    ncplane_set_bg_rgb8(alert_plane, 200, 0, 0);
-
-    nccell base_cell = NCCELL_TRIVIAL_INITIALIZER;
-    nccell_set_bg_rgb8(&base_cell, 200, 0, 0);
-    ncplane_set_base_cell(alert_plane, &base_cell);
-
-    uint64_t chan = 0;
-    ncchannels_set_fg_rgb8(&chan, 255, 255, 255);
-    ncchannels_set_bg_rgb8(&chan, 200, 0, 0);
-    ncplane_rounded_box(alert_plane, 0, chan, box_height - 1, box_width - 1, 0);
-
-    ncplane_putstr_yx(alert_plane, 1, 2, titleText.data());
-    for (size_t i = 0; i < wrapped_lines.size(); ++i)
-        ncplane_putstr_yx(alert_plane, 2 + (int)i, 2, wrapped_lines[i].c_str());
-
-    notcurses_render(nc);
-    std::this_thread::sleep_for(std::chrono::milliseconds((int)(duration * 1000)));
-    ncplane_destroy(alert_plane);
-    notcurses_render(nc);
-}
-
+// ── Main ──────────────────────────────────────────────────────────────────────
 int main() {
-    setlocale(LC_ALL, "");
-    notcurses_options opts = {};
-    nc = notcurses_init(&opts, nullptr);
-    std_plane = notcurses_stdplane(nc);
+    // ── Initialize subsystems ─────────────────────────────────────────────────
+#if ENABLE_LOGGING
+    logging_init();
+    LOG("upl_scroller starting (overlay %dx%d at %d,%d, shm=%s)",
+            OVERLAY_W, OVERLAY_H, OVERLAY_X, OVERLAY_Y, SHM_PATH);
+#endif
 
-    ncplane_dim_yx(std_plane, &win_height, &win_width);
-
-    returnToNormalBoarder(true);
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    //run_reel("  UPL TRAIN CAM  *  24 HRS A DAY   ", 0.1);
-
-    createAlertWindow("摧毁我肥兔的生活", "mister beast better get me the new 6 7 matcha labubu clairo vinyl dubai chocoalte trump announced dead at 79 sports car", 3.0f);  // Shows for 3 seconds
-    std::thread audio_thread(playMp3, "bing.mp3");
-    audio_thread.join();
-
-
-    while (true){
-        run_reel("UPL TRAIN CAM * 24 HOURS A DAY * NON STOP * SERIOUSLY... *", 0.15);
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+    // SHM + Cairo
+    if (!init_shm_cairo()) {
+        LOG("FATAL: init_shm_cairo failed");
+        fprintf(stderr, "Cairo init failed\n"); return 1;
     }
-    
-    
-    notcurses_stop(nc);
+    LOG("init_shm_cairo OK (%d bytes mapped)", g_shm_size);
+
+    // Font
+    font_init("pix.ttf");
+    LOG("font_init OK");
+
+    // Scroll
+    scroll_init();
+    LOG("scroll_init OK");
+
+    // MPV connection
+    if (!mpv_connect()) {
+        LOG("FATAL: mpv_connect failed - is mpv running with "
+                "--input-ipc-server=/tmp/mpvsock ?");
+        fprintf(stderr, "MPV connect failed\n"); return 1;
+    }
+
+    // Query mpv properties
+    LOG("querying mpv properties...");
+    mpv_query_props();
+
+    // ── Start bouncing animation (scans /static and loads random image) ─────────
+    LOG("starting bouncing animation");
+    bounce_init(true);
+    logo_init("static/uplLogo.JPG");
+
+    // Start Claude status monitoring
+    LOG("starting Claude status monitor (polling every %d seconds)",
+         ClaudeStatusMonitor::POLL_INTERVAL_SEC);
+    g_claude_monitor.start();
+
+    // Drain mpv responses
+    drain_mpv_replies();
+
+    // ── Second query ───────────────────────────────────────────────────────────
+    LOG("re-querying mpv properties (VO should be running)...");
+    mpv_query_props();
+
+    // Main loop: keep refreshing so mpv doesn't drop overlay
+    // Frame rate: 33ms (defined by constant) with bouncing animation and scrolling text
+    while (true) {
+        clear_to_transparent();
+
+        // Update animation states
+        bounce_update();
+        scroll_update();
+
+        // Draw scrolling text (behind image, at bottom)
+        scroll_draw();
+
+        // Draw Claude status overlay (top-right, red box if down)
+        g_claude_monitor.render();
+
+        // Draw bouncing image (in front)
+        bounce_draw();
+
+        // Draw static UPL logo in top-left (always on top)
+        logo_draw();
+
+        mpv_present_overlay();
+        std::this_thread::sleep_for(std::chrono::milliseconds(FRAME_MS));
+    }
+
+    // ── Cleanup (unreachable in normal operation) ──────────────────────────────
+    g_claude_monitor.stop();
+    scroll_shutdown();
+    bounce_shutdown();
+    font_shutdown();
+    mpv_shutdown();
+    cairo_destroy(g_cr);
+    cairo_surface_destroy(g_surface);
+    munmap(g_shm_data, g_shm_size);
+    logging_shutdown();
     return 0;
 }

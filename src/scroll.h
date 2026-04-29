@@ -1,29 +1,18 @@
 #pragma once
-#include <notcurses/notcurses.h>
-#include "mainLoop.h"
-#include <vector>
-#include <string>
-#include <string_view>
-#include <utility>
+#include "ScrollEvent.h"
 
-enum ScrollDirection { SCROLL_LEFT, SCROLL_RIGHT };
+// Initialize scrolling subsystem (call once at startup)
+void scroll_init();
 
-struct Scroll {
-    std::string           text;
-    int                   y;
-    float                 speed;
-    ScrollDirection       dir;
-    int                   scroll_x;     // x of anchor plane (= left edge of letter[0])
-    float                 accumulator;
-    bool                  done;
-    ncplane*              plane;        // transparent anchor; letter planes are children
-    std::vector<ncplane*> planes;
-    uint32_t              fg_color;
-    uint32_t              bg_color;
+// Update scroll animation state (call every frame)
+// Returns true if text is currently scrolling
+bool scroll_update();
 
-    Scroll(std::string_view text, int y, float speed, ScrollDirection dir,
-           unsigned win_width, uint32_t fg_color = 0xFFFFFF, uint32_t bg_color = 0x000000);
-};
+// Draw the scrolling text at the bottom (call after bounce_draw)
+void scroll_draw();
 
-std::pair<float, float> calc_sync_speeds(int len1, int len2, unsigned win_width, float base_speed);
-void run_scrolls(notcurses* nc, ncplane* std_plane, std::vector<Scroll>& scrolls);
+// Shutdown scrolling subsystem (cleanup at program exit)
+void scroll_shutdown();
+
+// Refresh scroll events to new random set
+void scroll_refresh_events();
