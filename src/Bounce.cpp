@@ -214,8 +214,8 @@ void logo_draw() {
     font_set_size(24.0);
     cairo_text_extents_t te;
     cairo_text_extents(g_cr, time_str, &te);
-    int text_x = (OVERLAY_W - (int)te.width) / 2;
-    int text_y = LOGO_SIZE + 30;
+    int text_x = (OVERLAY_W - (int)te.width) / 8;
+    int text_y = (OVERLAY_H - (int)te.height) / 8;
     cairo_move_to(g_cr, (double)text_x, (double)(text_y - te.y_bearing));
     cairo_show_text(g_cr, time_str);
     cairo_fill(g_cr);

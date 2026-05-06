@@ -81,10 +81,9 @@ while true; do
         fi
 
         # Volume ramp cycle: quietVol -> defaultVol -> quietVol
-        while true; do
-            vol_up_slow
-            vol_down_slow
-        done
+        vol_up_slow
+        sleep 10
+        vol_down_slow
 
         # Full ramp cycle complete — sleep random 1-3 hours, checking each minute
         sleep_seconds=$(( (RANDOM % 7200) + 3600 ))
