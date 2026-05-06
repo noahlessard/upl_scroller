@@ -21,22 +21,38 @@ is_active_hours() {
     fi
 }
 
+# Control screen and audio with CEC over HDMI to TV
 screen_blank() {
-    vcgencmd display_power 0
+    echo "standby 0" | cec-client -s -d 1
     BLANKED=1
 }
 
 screen_unblank() {
-    vcgencmd display_power 1
+    echo "on 0" | cec-client -s -d 1
     BLANKED=0
 }
 
-screen_unblank
-wpctl set-volume $WPCTL_HDMI_ID ${quietVol}%
+vol_down_full() {
+    { for i in $(seq 50); do echo "voldown"; done; echo "quit"; } | cec-client -d 1
+}
 
+vol_up_full() {
+    { for i in $(seq 50); do echo "volup"; done; echo "quit"; } | cec-client -d 1
+}
+
+vol_up_slow() {
+    { for i in $(seq 50); do echo "volup"; sleep 1; done; echo "quit"; } | cec-client -d 1
+}
+
+vol_down_slow() {
+    { for i in $(seq 50); do echo "voldown"; sleep 1; done; echo "quit"; } | cec-client -d 1
+}
+
+screen_unblank
+vol_down_full
 
 # Start audio loop
-taskset -c 2 mpv --loop --no-video bing.mp3 &
+taskset -c 2 mpv --loop --no-video /media/upl/W/train.m4a &
 
 # Start MPV fullscreen with IPC socket for overlay-add support
 rm -f /tmp/mpvsock
@@ -65,35 +81,23 @@ while true; do
         fi
 
         # Volume ramp cycle: quietVol -> defaultVol -> quietVol
-        direction=1  # 1 = ramping up, 0 = ramping down
-        vol=$quietVol
-
         while true; do
-            wpctl set-volume $WPCTL_HDMI_ID ${vol}%
-            sleep 30
-            if [[ $direction -eq 1 ]]; then
-                vol=$((vol + 1))
-                if [[ $vol -ge $defaultVol ]]; then
-                    direction=0
-                fi
-            else
-                vol=$((vol - 1))
-                if [[ $vol -le $quietVol ]]; then
-                    break
-                fi
-            fi
+            vol_up_slow
+            vol_down_slow
         done
 
-        # Full ramp cycle complete — sleep random 12-24 hours
-        sleep_seconds=$(( (RANDOM % 43200) + 43200 ))
-        sleep $sleep_seconds
-
+        # Full ramp cycle complete — sleep random 1-3 hours, checking each minute
+        sleep_seconds=$(( (RANDOM % 7200) + 3600 ))
+        while [[ $sleep_seconds -gt 0 ]]; do
+            sleep 60
+            sleep_seconds=$((sleep_seconds - 60))
+            if ! is_active_hours; then
+                break
+            fi
+        done
     else
         if [[ $BLANKED -eq 0 ]]; then
             screen_blank
         fi
     fi
-
-    # Check every 60 seconds before checking again
-    sleep 60
 done
