@@ -14,7 +14,7 @@ fi
 
 is_active_hours() {
     current_hour=$(date +%H)
-    if [[ $current_hour -ge 19 ]] || [[ $current_hour -lt 3 ]]; then
+    if [[ $current_hour -ge 10 ]] || [[ $current_hour -lt 1 ]]; then
         return 0  # true - active hours
     else
         return 1  # false - blank hours
@@ -28,7 +28,11 @@ screen_blank() {
 }
 
 screen_unblank() {
-    echo "on 0" | cec-client -s -d 1
+    {
+        echo "on 0"
+        sleep 3
+        echo "as"
+    } | cec-client -s -d 1
     BLANKED=0
 }
 
